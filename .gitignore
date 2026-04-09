@@ -1,0 +1,48 @@
+# Dependency directories
+node_modules/
+**/node_modules/
+venv/
+**/venv/
+env/
+**/env/
+
+# Build outputs
+build/
+**/build/
+dist/
+**/dist/
+.cache/
+**/.cache/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environments and Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.log
+
+# Python
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+
+# Flutter/Dart
+.dart_tool/
+**/.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata

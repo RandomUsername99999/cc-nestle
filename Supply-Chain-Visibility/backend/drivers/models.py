@@ -1,0 +1,23 @@
+from django.db import models
+
+class Driver(models.Model):
+    driver_id = models.AutoField(primary_key=True)
+    employee = models.OneToOneField('api.Employee', on_delete=models.CASCADE, related_name='driver_profile', db_column='employee_id')
+    license_number = models.CharField(max_length=50)
+    license_expiry_date = models.DateField()
+    license_type = models.CharField(max_length=20, default='heavy_vehicle')
+    experience_years = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
+    medical_certificate_expiry = models.DateField(null=True, blank=True)
+    last_training_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, default='available')
+
+    def __str__(self):
+        return f"{self.employee.full_name} ({self.license_number})"
+
+    @property
+    def id(self):
+        return self.driver_id
+
+    class Meta:
+        managed = True
+        db_table = 'drivers'
