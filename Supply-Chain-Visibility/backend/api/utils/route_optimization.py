@@ -1,5 +1,10 @@
-import numpy as np
-from sklearn.cluster import DBSCAN
+try:
+    import numpy as np
+    from sklearn.cluster import DBSCAN
+    HAS_OPTIMIZATION_LIBS = True
+except ImportError:
+    HAS_OPTIMIZATION_LIBS = False
+
 from typing import List, Dict
 import math
 
@@ -36,6 +41,11 @@ def cluster_orders(orders: List[Dict]):
         if pkey not in partitions:
             partitions[pkey] = []
         partitions[pkey].append(o)
+
+    if not HAS_OPTIMIZATION_LIBS:
+        print("⚠️ Route Optimization libraries (numpy/sklearn) missing. Using basic grouping.")
+        # Fallback: Just group by composite key without GPS clustering
+        return {pkey: [o['id'] for o in p_orders] for pkey, p_orders in partitions.items()}
 
     all_clusters = {}
     

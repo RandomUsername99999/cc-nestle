@@ -1,4 +1,8 @@
-import paho.mqtt.client as mqtt
+try:
+    import paho.mqtt.client as mqtt
+    HAS_MQTT = True
+except ImportError:
+    HAS_MQTT = False
 import json
 import logging
 from django.conf import settings
@@ -43,6 +47,10 @@ def on_message(client, userdata, msg):
         logger.error(f"MQTT on_message error: {e}")
 
 def start_mqtt_listener():
+    if not HAS_MQTT:
+        logger.warning("⚠️ MQTT library missing. Listener disabled.")
+        return
+
     client = mqtt.Client()
     client.on_connect = on_connect
     client.on_message = on_message
