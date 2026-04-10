@@ -4,7 +4,12 @@ from rest_framework.response import Response
 from django.utils import timezone
 from .models import SupplierRun, GoodsReceiptLine, InboundException, POLineItem
 from .services.qr import verify_supplier_qr, verify_inbound_warehouse_qr
-from firebase_admin import db as firebase_db
+try:
+    from firebase_admin import db as firebase_db
+    HAS_FIREBASE = True
+except ImportError:
+    HAS_FIREBASE = False
+    firebase_db = None
 
 class SupplierQRScanView(APIView):
     """Driver scans the supplier's QR on arrival."""
@@ -125,10 +130,13 @@ class RunCompleteView(APIView):
         run.save(update_fields=['status', 'completed_at'])
 
         # Stop location tracking in Firebase
-        try:
-            firebase_db.reference(f'inbound_tracking/{run_id}/meta').update({'active': False})
-        except Exception as e:
-            print(f"Error updating Firebase: {e}")
+        if HAS_FIREBASE and firebase_db:
+            try:
+                firebase_db.reference(f'inbound_tracking/{run_id}/meta').update({'active': False})
+            except Exception as e:
+                print(f"Error updating Firebase: {e}")
+        else:
+            print("Skipping Firebase update: firebase-admin not installed.")
 
         # Apply received quantities and reconcile statuses
         from .services.po_matching import process_run_completion
