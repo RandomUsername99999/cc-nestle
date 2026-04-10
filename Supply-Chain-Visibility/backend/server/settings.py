@@ -14,6 +14,7 @@ from pathlib import Path
 
 import os
 from dotenv import load_dotenv
+import dj_database_url
 from urllib.parse import urlparse, parse_qsl
 
 load_dotenv()
@@ -93,29 +94,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'server.wsgi.application'
 
-db_url = os.getenv("DATABASE_URL")
-
-if db_url:
-    tmpPostgres = urlparse(db_url)
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': tmpPostgres.path.replace('/', ''),
-            'USER': tmpPostgres.username,
-            'PASSWORD': tmpPostgres.password,
-            'HOST': tmpPostgres.hostname,
-            'PORT': tmpPostgres.port or 5432,
-            'OPTIONS': dict(parse_qsl(tmpPostgres.query)),
-        }
-    }
-else:
-    # Use MySQL or SQLite locally if DATABASE_URL is missing
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+# Database configuration
+# Use DATABASE_URL from environment if available (e.g. on Render/Vercel)
+DATABASES = {
+    'default': dj_database_url.config(
+        default=os.getenv('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -142,9 +129,15 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# WhiteNoise configuration for production static files
-if not DEBUG:
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Storage configuration for production
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
