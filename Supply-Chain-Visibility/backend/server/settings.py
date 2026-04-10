@@ -168,8 +168,13 @@ SIMPLE_JWT = {
 # DatabaseWrapper.check_database_version_supported = lambda getattr: None
 
 # Firebase Configuration
-import firebase_admin
-from firebase_admin import credentials
+try:
+    import firebase_admin
+    from firebase_admin import credentials
+    HAS_FIREBASE = True
+except ImportError:
+    HAS_FIREBASE = False
+
 import base64
 import json
 import tempfile
@@ -211,4 +216,7 @@ def initialize_firebase():
     else:
         print("WARNING: No Firebase credentials found (env or file). Firebase features will be limited.")
 
-initialize_firebase()
+if HAS_FIREBASE:
+    initialize_firebase()
+else:
+    print("WARNING: firebase-admin not installed. Firebase features disabled.")
