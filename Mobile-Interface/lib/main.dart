@@ -1,5 +1,5 @@
-import 'package:cc_group/LoginPage.dart';
-import 'package:cc_group/HomePage.dart';
+import 'package:cc_group/login_page.dart';
+import 'package:cc_group/home_page.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

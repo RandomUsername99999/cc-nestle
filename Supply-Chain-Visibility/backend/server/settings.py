@@ -24,12 +24,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-p^wuzggj%0s(*!6#r+r91-8n@9ntmx-t3hj6x2@fmwf74b8^86'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-p^wuzggj%0s(*!6#r+r91-8n@9ntmx-t3hj6x2@fmwf74b8^86')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,.vercel.app').split(',')
+
+# Production Security Settings
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000 # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Application definition
 
@@ -54,6 +64,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -129,6 +140,11 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# WhiteNoise configuration for production static files
+if not DEBUG:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -161,17 +177,45 @@ SIMPLE_JWT = {
 # Firebase Configuration
 import firebase_admin
 from firebase_admin import credentials
+import base64
+import json
+import tempfile
 
-try:
-    # Use service account if exists, otherwise placeholder for dev
+def initialize_firebase():
+    firebase_creds_b64 = os.getenv('FIREBASE_SERVICE_ACCOUNT_B64')
+    
+    if firebase_creds_b64:
+        try:
+            # Decode the base64 string to JSON
+            creds_json = json.loads(base64.b64decode(firebase_creds_b64).decode('utf-8'))
+            
+            # Use a temporary file to load the certificate
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as temp_creds:
+                json.dump(creds_json, temp_creds)
+                temp_creds_path = temp_creds.name
+            
+            cred = credentials.Certificate(temp_creds_path)
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': os.getenv('FIREBASE_DATABASE_URL')
+            })
+            os.unlink(temp_creds_path) # Clean up
+            print("Firebase initialized using environment variable.")
+            return
+        except Exception as e:
+            print(f"ERROR: Firebase initialization from env failed: {e}")
+
+    # Fallback to local file for development
     cred_path = os.path.join(BASE_DIR, 'serviceAccount.json')
     if os.path.exists(cred_path):
-        cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred, {
-            'databaseURL': os.getenv('FIREBASE_DATABASE_URL', 'https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com')
-        })
+        try:
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': os.getenv('FIREBASE_DATABASE_URL', 'https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com')
+            })
+            print("Firebase initialized using serviceAccount.json.")
+        except Exception as e:
+            print(f"ERROR: Firebase initialization from file failed: {e}")
     else:
-        # For development without service account
-        print("WARNING: serviceAccount.json not found. Firebase features will be limited.")
-except Exception as e:
-    print(f"ERROR: Firebase initialization failed: {e}")
+        print("WARNING: No Firebase credentials found (env or file). Firebase features will be limited.")
+
+initialize_firebase()

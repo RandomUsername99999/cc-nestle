@@ -3,10 +3,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:convert';
-import 'package:cc_group/ShipmentAssignmentView.dart';
-import 'package:cc_group/LoginPage.dart';
+import 'package:cc_group/shipment_assignment_view.dart';
+import 'package:cc_group/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cc_group/DeliverySearchScreen.dart';
+import 'package:cc_group/delivery_search_screen.dart';
 
 class HomePage extends StatefulWidget {
   final int userId;
@@ -191,7 +191,7 @@ class _HomePageState extends State<HomePage> {
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(color: const Color(0xFFEFEBE9)),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10)),
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10)),
                 ],
               ),
               child: Column(
@@ -257,7 +257,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     borderRadius: BorderRadius.circular(32),
                     boxShadow: [
-                      BoxShadow(color: const Color(0xFF3E2723).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
+                      BoxShadow(color: const Color(0xFF3E2723).withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8)),
                     ],
                   ),
                   child: Row(
@@ -280,7 +280,7 @@ class _HomePageState extends State<HomePage> {
               Container(
                 padding: const EdgeInsets.all(32),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFEBE9).withOpacity(0.3),
+                  color: const Color(0xFFEFEBE9).withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(32),
                   border: Border.all(color: const Color(0xFFEFEBE9), style: BorderStyle.solid),
                 ),
@@ -306,7 +306,7 @@ class _HomePageState extends State<HomePage> {
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: (_isTracking ? Colors.red : Colors.green).withOpacity(0.3),
+                      color: (_isTracking ? Colors.red : Colors.green).withValues(alpha: 0.3),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),

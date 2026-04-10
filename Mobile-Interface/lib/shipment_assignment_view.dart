@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
-import 'QRScannerView.dart';
+import 'qr_scanner_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ShipmentAssignmentView extends StatefulWidget {
@@ -295,7 +295,7 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
           const SizedBox(height: 48),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
             child: Text("AUTO-ESCALATION IN: $minutes:$seconds", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(height: 48),
@@ -368,7 +368,7 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
         const SizedBox(height: 32),
         const Text("DELIVERY SEQUENCE", style: TextStyle(color: Colors.white30, fontWeight: FontWeight.bold, fontSize: 12)),
         const SizedBox(height: 16),
-        ...stops.map((stop) => _buildStopCard(stop)).toList(),
+        ...stops.map((stop) => _buildStopCard(stop)),
       ],
     );
   }
@@ -376,13 +376,13 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
   Widget _buildStopCard(Map<String, dynamic> stop) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
       child: ExpansionTile(
         iconColor: Colors.amber,
         collapsedIconColor: Colors.white24,
         title: Text(stop['address'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text("ETA: ${stop['estimated_arrival'].split('T')[1].substring(0, 5)}", style: const TextStyle(color: Colors.white38, fontSize: 12)),
-        leading: CircleAvatar(backgroundColor: Colors.amber.withOpacity(0.1), child: Text("${stop['sequence']}", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
+        leading: CircleAvatar(backgroundColor: Colors.amber.withValues(alpha: 0.1), child: Text("${stop['sequence']}", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

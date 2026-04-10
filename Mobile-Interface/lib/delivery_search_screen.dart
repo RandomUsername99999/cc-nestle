@@ -83,9 +83,9 @@ class _DeliverySearchScreenState extends State<DeliverySearchScreen> {
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: "Search ID, Address, or Status...",
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
                 prefixIcon: const Icon(Icons.search, color: Colors.white70),
-                fillColor: Colors.white.withOpacity(0.1),
+                fillColor: Colors.white.withValues(alpha: 0.1),
                 filled: true,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
@@ -103,10 +103,10 @@ class _DeliverySearchScreenState extends State<DeliverySearchScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.search_off, size: 64, color: Colors.brown.withOpacity(0.1)),
+                      Icon(Icons.search_off, size: 64, color: Colors.brown.withValues(alpha: 0.1)),
                       const SizedBox(height: 16),
                       Text("NO RESULTS FOUND", 
-                        style: TextStyle(fontWeight: FontWeight.w900, color: Colors.brown.withOpacity(0.2), letterSpacing: 1)),
+                        style: TextStyle(fontWeight: FontWeight.w900, color: Colors.brown.withValues(alpha: 0.2), letterSpacing: 1)),
                     ],
                   ),
                 )
@@ -134,7 +134,7 @@ class _DeliverySearchScreenState extends State<DeliverySearchScreen> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFEFEBE9)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
         ],
       ),
       child: ClipRRect(
@@ -191,9 +191,9 @@ class _DeliverySearchScreenState extends State<DeliverySearchScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Text(status.toUpperCase(), 
         style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w900)),

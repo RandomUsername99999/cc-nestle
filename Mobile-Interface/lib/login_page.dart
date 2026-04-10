@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:cc_group/HomePage.dart';
-import 'package:cc_group/UIComponents.dart';
+import 'package:cc_group/home_page.dart';
+import 'package:cc_group/ui_components.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,9 +18,9 @@ class LoginPage extends StatelessWidget {
         child: Column(
           children: [
             //Logo
-            LogoCard(),
+            const LogoCard(),
             //Login Card
-            LoginCard(),
+            const LoginCard(),
           ],
         ),
       ),
@@ -35,7 +35,7 @@ class LogoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
@@ -45,11 +45,11 @@ class LogoCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
+      child: const Column(
         children: [
           //Logo
           Logo(),
-          Container(
+          SizedBox(
             height: 25,
             child: Row(
               children: [
@@ -107,37 +107,37 @@ class _LoginCardState extends State<LoginCard> {
         }),
       );
 
-        if (response.statusCode == 200) {
-          // Successful login
-          final data = jsonDecode(response.body);
-          final userIdValue = data['user_id'];
-          final userRole = data['role'] ?? 'unknown';
-          final accessToken = data['access'] ?? '';
-          final refreshToken = data['refresh'] ?? '';
+      if (response.statusCode == 200) {
+        // Successful login
+        final data = jsonDecode(response.body);
+        final userIdValue = data['user_id'];
+        final userRole = data['role'] ?? 'unknown';
+        final accessToken = data['access'] ?? '';
+        final refreshToken = data['refresh'] ?? '';
 
-          // RBAC: Only drivers can use the mobile app
-          if (userRole != 'driver') {
-            setState(() {
-                _isLoading = false;
-                _errorMessage = "Access Denied: Mobile access is reserved for drivers only. Please use the web portal.";
-            });
-            return;
-          }
-          
-          // Persist session with JWT tokens for authenticated API calls
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setInt('userId', userIdValue);
-          await prefs.setString('access_token', accessToken);
-          await prefs.setString('refresh_token', refreshToken);
-          await prefs.setString('user_role', userRole);
-          
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => HomePage(userId: userIdValue)),
-            );
-          }
-        } else {
+        // RBAC: Only drivers can use the mobile app
+        if (userRole != 'driver') {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = "Access Denied: Mobile access is reserved for drivers only. Please use the web portal.";
+          });
+          return;
+        }
+
+        // Persist session with JWT tokens for authenticated API calls
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('userId', userIdValue);
+        await prefs.setString('access_token', accessToken);
+        await prefs.setString('refresh_token', refreshToken);
+        await prefs.setString('user_role', userRole);
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => HomePage(userId: userIdValue)),
+          );
+        }
+      } else {
         final errorData = jsonDecode(response.body);
         final errorMsg = errorData['detail'] ?? "Invalid credentials. Please try again.";
         setState(() => _errorMessage = errorMsg);
@@ -151,77 +151,75 @@ class _LoginCardState extends State<LoginCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(10),
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: HoverContainer(
-                  container: Container(
-                    width: 500,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: Colors.white,
-                    ),
-                    padding: EdgeInsets.fromLTRB(20, 20, 20, 40),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AppText(text: "Secure Login", size: 32),
-                        const SizedBox(height: 10),
-                        RoleDisplayer(),
-                        const SizedBox(height: 20),
-                        _buildTextField("Username or Email", _usernameController, false),
-                        const SizedBox(height: 15),
-                        _buildTextField("Password", _passwordController, true),
-                        const SizedBox(height: 10),
-                        if (_errorMessage != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Text(
-                              _errorMessage!,
-                              style: TextStyle(color: Colors.red, fontSize: 13),
-                            ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: HoverContainer(
+                container: Container(
+                  width: 500,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.white,
+                  ),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const AppText(text: "Secure Login", size: 32),
+                      const SizedBox(height: 10),
+                      const RoleDisplayer(),
+                      const SizedBox(height: 20),
+                      _buildTextField("Username or Email", _usernameController, false),
+                      const SizedBox(height: 15),
+                      _buildTextField("Password", _passwordController, true),
+                      const SizedBox(height: 10),
+                      if (_errorMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: Colors.red, fontSize: 13),
                           ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            AppText(text: "Forgotten Password?", size: 14),
-                          ],
                         ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: _isLoading ? null : _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color.fromARGB(255, 76, 47, 36),
-                            minimumSize: Size(double.infinity, 50),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          AppText(text: "Forgotten Password?", size: 14),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: _isLoading ? null : _handleLogin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color.fromARGB(255, 76, 47, 36),
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                )
-                              : const Text("Secure Login", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
-                        const SizedBox(height: 20),
-                        AppText(text: "Authorized Use Only", size: 13),
-                        AppText(text: "Access is monitored and recorded", size: 12),
-                      ],
-                    ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text("Secure Login", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(height: 20),
+                      const AppText(text: "Authorized Use Only", size: 13),
+                      const AppText(text: "Access is monitored and recorded", size: 12),
+                    ],
                   ),
                 ),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -229,7 +227,7 @@ class _LoginCardState extends State<LoginCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         const SizedBox(height: 5),
         TextField(
           controller: controller,
@@ -237,16 +235,13 @@ class _LoginCardState extends State<LoginCard> {
           decoration: InputDecoration(
             hintText: "Enter your $label",
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),
       ],
     );
   }
 }
-//TextLabel
-
-bool _isHovered = false;
 
 class HoverContainer extends StatefulWidget {
   final Widget container;
@@ -257,21 +252,23 @@ class HoverContainer extends StatefulWidget {
 }
 
 class _HoverContainerState extends State<HoverContainer> {
+  bool _isHovered = false;
+
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
       onEnter: (event) => setState(() => _isHovered = true),
       onExit: (event) => setState(() => _isHovered = false),
       child: AnimatedContainer(
-        duration: Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
               color: _isHovered
-                  ? Colors.brown.withOpacity(0.5)
-                  : Colors.black.withOpacity(0.5),
+                  ? Colors.brown.withValues(alpha: 0.5)
+                  : Colors.black.withValues(alpha: 0.5),
               blurRadius: _isHovered ? 15 : 5,
               spreadRadius: _isHovered ? 5 : 1,
               offset: Offset(0, _isHovered ? 8 : 3),
@@ -300,15 +297,16 @@ class InputField extends StatefulWidget {
 }
 
 class _InputFieldState extends State<InputField> {
-  @override
   final myController = TextEditingController();
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        AppText(text: "Secure Login", size: 40),
-        RoleDisplayer(),
-        Row(children: [Text("Username or Email")]),
+        const AppText(text: "Secure Login", size: 40),
+        const RoleDisplayer(),
+        const Row(children: [Text("Username or Email")]),
         TextField(
           controller: myController,
           cursorColor: Colors.brown,
@@ -324,7 +322,7 @@ class _InputFieldState extends State<InputField> {
               gapPadding: 1,
               borderRadius: BorderRadius.circular(5),
             ),
-            focusedBorder: OutlineInputBorder(
+            focusedBorder: const OutlineInputBorder(
               borderSide: BorderSide(color: Colors.brown, width: 3),
             ),
           ),
@@ -352,9 +350,9 @@ class _PasswordLabelState extends State<PasswordLabel> {
         border: OutlineInputBorder(
           gapPadding: 1,
           borderRadius: BorderRadius.circular(5),
-          borderSide: BorderSide(color: Colors.blueGrey, width: 5),
+          borderSide: const BorderSide(color: Colors.blueGrey, width: 5),
         ),
-        focusedBorder: OutlineInputBorder(
+        focusedBorder: const OutlineInputBorder(
           borderSide: BorderSide(color: Colors.brown, width: 3),
         ),
         suffixIcon: IconButton(
@@ -390,11 +388,11 @@ class _RoleDisplayerState extends State<RoleDisplayer> {
     return RichText(
       text: TextSpan(
         style: DefaultTextStyle.of(context).style.copyWith(
-          fontSize: 20,
-          color: const Color.fromARGB(255, 76, 47, 36),
-        ),
+              fontSize: 20,
+              color: const Color.fromARGB(255, 76, 47, 36),
+            ),
         children: <TextSpan>[
-          TextSpan(text: "Role: "),
+          const TextSpan(text: "Role: "),
           TextSpan(
             text: role,
             style: TextStyle(color: colorThemes[role]),
