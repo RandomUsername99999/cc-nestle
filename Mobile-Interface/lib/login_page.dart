@@ -99,7 +99,7 @@ class _LoginCardState extends State<LoginCard> {
     try {
       final response = await http.post(
         // Use 127.0.0.1 for desktop/web testing. Change to 10.0.2.2 for Android Emulator.
-        Uri.parse('http://127.0.0.1:8000/api/token/'),
+        Uri.parse('https://UnderpaidWorker.pythonanywhere.com/api/token/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'username': username,
@@ -143,7 +143,7 @@ class _LoginCardState extends State<LoginCard> {
         setState(() => _errorMessage = errorMsg);
       }
     } catch (e) {
-      setState(() => _errorMessage = "Connection error. Ensure backend is running at 127.0.0.1:8000.");
+      setState(() => _errorMessage = "Connection error. Ensure backend is running at UnderpaidWorker.pythonanywhere.com");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

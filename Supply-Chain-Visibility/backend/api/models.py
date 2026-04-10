@@ -20,6 +20,17 @@ class CustomUserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
+    def create_superuser(self, username, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_superuser', True)
+        # Create a default admin role if it doesn't exist
+        from api.models import Role
+        role, _ = Role.objects.get_or_create(
+            role_name='Admin',
+            defaults={'role_description': 'System Administrator'}
+        )
+        extra_fields['role'] = role
+        return self.create_user(username, email, password, **extra_fields)
+
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     user_id = models.AutoField(primary_key=True)
     username = models.CharField(max_length=50, unique=True)

@@ -25,7 +25,7 @@ class _HomePageState extends State<HomePage> {
   String? _accessToken;
   
   // Use 127.0.0.1 for desktop/web testing. Change back to 10.0.2.2 for Android Emulator.
-  final String _baseApiUrl = "http://127.0.0.1:8000/api/";
+  final String _baseApiUrl = "https://UnderpaidWorker.pythonanywhere.com/api/";
 
   Map<String, String> get _authHeaders => {
     'Content-Type': 'application/json',

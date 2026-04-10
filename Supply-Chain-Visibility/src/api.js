@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8000/api/' : 'https://my-app-backend.onrender.com/api/',
+    baseURL: 'https://UnderpaidWorker.pythonanywhere.com/api/',
 });
 
 api.interceptors.request.use(
