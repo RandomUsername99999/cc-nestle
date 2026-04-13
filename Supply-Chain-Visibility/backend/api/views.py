@@ -469,6 +469,48 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             return [IsDispatcherRole()]
         return [IsInternalRole()]
 
+    def perform_destroy(self, instance):
+        with transaction.atomic():
+            # 1. Reset all orders linked to this shipment
+            from .models import ShipmentOrder, OrderStatusLog
+            mappings = ShipmentOrder.objects.filter(shipment=instance)
+            for m in mappings:
+                order = m.order
+                old_status = order.status
+                order.status = 'pending'
+                order.assigned_vehicle = None
+                order.assigned_driver = None
+                order.save()
+                
+                # Log the status reversal for audit trail
+                OrderStatusLog.objects.create(
+                    order=order,
+                    from_status=old_status,
+                    to_status='pending',
+                    changed_by=self.request.user,
+                    source='management_deletion'
+                )
+
+            # 2. Release Assets
+            if instance.vehicle:
+                instance.vehicle.status = 'available'
+                instance.vehicle.save()
+            if instance.driver:
+                instance.driver.status = 'available'
+                instance.driver.save()
+            
+            # 3. Audit Logging
+            from .models import AuditLog
+            AuditLog.objects.create(
+                user=self.request.user,
+                action='DELETE_SHIPMENT',
+                resource_type='Shipment',
+                resource_id=instance.shipment_id,
+                details=f"Permanent deletion of Shipment #{instance.shipment_id}. Associated orders reverted to 'pending' as primary records."
+            )
+            
+            instance.delete()
+
     @action(detail=False, methods=['post'])
     def deploy_manifest(self, request):
         order_ids = request.data.get('order_ids', [])
@@ -624,6 +666,11 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             return Response({
                 "shipment_id": str(shipment.shipment_id),
                 "status": shipment.status,
+                "vehicle": {
+                    "plate_number": shipment.vehicle.plate_number,
+                    "model": f"{shipment.vehicle.manufacturer} {shipment.vehicle.model}" if shipment.vehicle.model else shipment.vehicle.manufacturer,
+                    "is_refrigerated": shipment.vehicle.is_refrigerated
+                },
                 "warehouse": {
                     "id": first_order.warehouse_id,
                     "name": first_order.warehouse_name,
@@ -802,10 +849,29 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             else:
                 driver = DriverProfile.objects.get(employee__user_id=user_id_fallback)
                 
-            shipment = Shipment.objects.filter(driver=driver, status__in=['dispatched', 'in_transit']).first()
+            shipment = Shipment.objects.filter(driver=driver, status__in=['dispatched', 'accepted', 'in_transit']).first()
             if shipment:
-                return Response(ShipmentSerializer(shipment).data)
+                data = ShipmentSerializer(shipment).data
+                data['assignment_type'] = 'outbound'
+                return Response(data)
+                
+            # Check for Inbound Assignment
+            from inbound.models import InboundCollectionAssignment
+            from inbound.serializers import AssignmentDetailSerializer
+            target_user_id = user.id if user.is_authenticated else user_id_fallback
+            inbound_assignment = InboundCollectionAssignment.objects.filter(
+                driver__employee__user_id=target_user_id,
+                status__in=['assigned', 'accepted', 'en_route', 'at_supplier', 'verifying', 'returning']
+            ).first()
+
+
+            if inbound_assignment:
+                data = AssignmentDetailSerializer(inbound_assignment).data
+                data['assignment_type'] = 'inbound'
+                return Response(data)
+
             return Response({'detail': 'No active manifest assigned to this driver.'}, status=status.HTTP_404_NOT_FOUND)
+
         except DriverProfile.DoesNotExist:
             return Response({'error': 'Driver profile not found for the provided identity.'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -984,3 +1050,49 @@ class OrderAuditView(APIView):
                 for h in history
             ]
         return []
+
+
+class ChangePasswordView(APIView):
+    """
+    Allow an authenticated user to change their own password.
+    POST: { "old_password": "...", "new_password": "..." }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        old_password = request.data.get('old_password', '')
+        new_password = request.data.get('new_password', '')
+
+        if not old_password or not new_password:
+            return Response(
+                {'detail': 'Both old_password and new_password are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not user.check_password(old_password):
+            return Response(
+                {'detail': 'Current password is incorrect.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(new_password) < 6:
+            return Response(
+                {'detail': 'New password must be at least 6 characters long.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user.set_password(new_password)
+        user.save()
+
+        # Audit log
+        from .models import AuditLog
+        AuditLog.objects.create(
+            user=user,
+            action='PASSWORD_CHANGE',
+            resource_type='Account',
+            details=f"User '{user.username}' changed their password."
+        )
+
+        return Response({'detail': 'Password updated successfully.'}, status=status.HTTP_200_OK)
+

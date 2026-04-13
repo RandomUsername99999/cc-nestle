@@ -6,6 +6,27 @@ import {
 } from "react-icons/bi";
 import { toast } from "react-hot-toast";
 import FilterPanel from "../components/FilterPanel";
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { QRCodeSVG } from 'qrcode.react';
+
+// Fix leaflet marker icon resolution issues
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+  iconUrl: require('leaflet/dist/images/marker-icon.png'),
+  shadowUrl: require('leaflet/dist/images/marker-shadow.png')
+});
+
+const LocationSelector = ({ onChange }) => {
+    useMapEvents({
+        click(e) {
+            onChange(`Lat: ${e.latlng.lat.toFixed(5)}, Lng: ${e.latlng.lng.toFixed(5)}`);
+        },
+    });
+    return null;
+};
 
 const OrderManagement = () => {
     const [orders, setOrders] = useState([]);
@@ -23,6 +44,8 @@ const OrderManagement = () => {
         pickup_address: '',
         delivery_address: '',
     });
+
+    const [expandedQR, setExpandedQR] = useState(null);
 
     useEffect(() => {
         fetchOrders();
@@ -164,7 +187,18 @@ const OrderManagement = () => {
                                 </tr>
                             ) : orders.map(order => (
                                 <tr key={order.order_id} className="hover:bg-coffee-50/10 transition-all group">
-                                    <td className="px-6 py-5 font-black text-coffee-900 text-sm">#ORD-{order.order_id}</td>
+                                    <td className="px-6 py-5">
+                                        <div className="flex items-center gap-3">
+                                            <div 
+                                                className="bg-white p-1 rounded-lg border border-coffee-100 shadow-sm shrink-0 cursor-pointer hover:shadow-md hover:scale-110 hover:-rotate-2 transition-all" 
+                                                title="Expand QR Code"
+                                                onClick={() => setExpandedQR({url: `${window.location.origin}/admin/orders?id=${order.order_id}`, id: `ORDER-${order.order_id}`})}
+                                            >
+                                                <QRCodeSVG value={`${window.location.origin}/admin/orders?id=${order.order_id}`} size={32} fgColor="#3E2723" />
+                                            </div>
+                                            <span className="font-black text-coffee-900 text-sm">#ORD-{order.order_id}</span>
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-5">
                                         <div className="flex flex-col space-y-1">
                                             <div className="flex items-center space-x-2">
@@ -224,14 +258,14 @@ const OrderManagement = () => {
 
             {/* Create/Edit Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-[#3E2723]/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-[24px] w-full max-w-xl shadow-2xl border border-coffee-100 animate-fade-in-up">
-                        <div className="p-6 border-b border-coffee-50">
+                <div className="fixed inset-0 bg-[#3E2723]/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="bg-white rounded-[24px] w-full max-w-xl shadow-2xl border border-coffee-100 animate-fade-in-up my-auto max-h-[90vh] flex flex-col overflow-hidden">
+                        <div className="p-6 border-b border-coffee-50 shrink-0">
                             <h2 className="text-xl font-black text-coffee-950 tracking-tight">{currentOrder ? 'Edit Identity Parameters' : 'Provision New Order'}</h2>
                             <p className="text-coffee-500 font-medium text-xs mt-0.5">Configure logistics payload and destination targets.</p>
                         </div>
                         
-                        <form onSubmit={handleSaveOrder} className="p-6 space-y-4">
+                        <form onSubmit={handleSaveOrder} className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-coffee-400 ml-1">Shipment Type</label>
@@ -303,15 +337,26 @@ const OrderManagement = () => {
                                 />
                             </div>
 
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-coffee-400 ml-1">Delivery Address</label>
-                                <textarea 
-                                    value={formData.delivery_address}
-                                    onChange={(e) => setFormData({...formData, delivery_address: e.target.value})}
-                                    className="w-full bg-coffee-50/50 border border-coffee-100 rounded-xl px-4 py-2 text-sm font-bold text-coffee-900 focus:outline-none focus:ring-4 focus:ring-coffee-500/10 focus:border-coffee-300 h-20 resize-none transition-all"
-                                    placeholder="Destination target address..."
-                                    required
-                                />
+                            <div className="space-y-1.5 pt-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-coffee-400 ml-1">Delivery Address & Geo-Targeting</label>
+                                <div className="flex gap-3 h-40">
+                                    <textarea 
+                                        value={formData.delivery_address}
+                                        onChange={(e) => setFormData({...formData, delivery_address: e.target.value})}
+                                        className="w-1/2 bg-coffee-50/50 border border-coffee-100 rounded-xl px-4 py-2 text-sm font-bold text-coffee-900 focus:outline-none focus:ring-4 focus:ring-coffee-500/10 focus:border-coffee-300 resize-none transition-all"
+                                        placeholder="Enter address manually or click map..."
+                                        required
+                                    />
+                                    <div className="w-1/2 rounded-xl border border-coffee-100 overflow-hidden relative z-0">
+                                        <MapContainer center={[6.92708, 79.86124]} zoom={12} style={{width: '100%', height: '100%'}}>
+                                            <TileLayer 
+                                               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" 
+                                               attribution='&copy; <a href="https://carto.com/">Carto</a>'
+                                            />
+                                            <LocationSelector onChange={(str) => setFormData({...formData, delivery_address: str})} />
+                                        </MapContainer>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex justify-end space-x-3 pt-4 border-t border-coffee-50">
@@ -330,6 +375,29 @@ const OrderManagement = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* QR Expansion Modal */}
+            {expandedQR && (
+                <div 
+                    className="fixed inset-0 bg-[#3E2723]/80 backdrop-blur-md flex flex-col items-center justify-center z-[100] p-6 animate-fade-in" 
+                    onClick={() => setExpandedQR(null)}
+                >
+                    <div className="bg-white p-10 rounded-[32px] shadow-2xl flex flex-col items-center border border-coffee-100 animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-white p-4 rounded-2xl shadow-inner border border-coffee-50 mb-2">
+                            <QRCodeSVG value={expandedQR.url} size={256} fgColor="#3E2723" />
+                        </div>
+                        <p className="mt-6 font-black text-2xl text-coffee-950 tracking-widest font-mono">{expandedQR.id}</p>
+                        <p className="mt-1 text-sm text-coffee-400 font-bold uppercase tracking-widest">Driver Pickup Confirmation Code</p>
+                        <button 
+                            type="button"
+                            onClick={() => setExpandedQR(null)} 
+                            className="mt-8 bg-coffee-50 hover:bg-coffee-100 text-coffee-800 px-8 py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                        >
+                            Close Viewer
+                        </button>
                     </div>
                 </div>
             )}

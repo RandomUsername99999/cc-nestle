@@ -228,6 +228,34 @@ export default function VehicleManagement() {
                 </div>
             </div>
 
+            {/* Fleet Summary Bar */}
+            <div className="bg-white border border-coffee-100 rounded-[32px] p-6 shadow-sm flex flex-col md:flex-row items-center gap-8">
+                <div className="flex-1 w-full">
+                    <div className="flex justify-between items-end mb-3">
+                        <h3 className="text-[11px] font-black text-coffee-400 uppercase tracking-[0.2em]">Operational Fleet Capacity</h3>
+                        <span className="text-sm font-black text-coffee-950">
+                            {vehicles.length > 0 ? Math.round((vehicles.filter(v => !v.status || v.status === 'Ready' || v.status === 'Active').length / vehicles.length) * 100) : 0}% Available
+                        </span>
+                    </div>
+                    <div className="w-full h-4 bg-coffee-50 rounded-full overflow-hidden p-1 shadow-inner translate-z-0">
+                        <div 
+                            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all duration-1000 ease-out shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                            style={{ width: `${vehicles.length > 0 ? (vehicles.filter(v => !v.status || v.status === 'Ready' || v.status === 'Active').length / vehicles.length) * 100 : 0}%` }}
+                        ></div>
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 shrink-0">
+                    <div className="bg-coffee-50/50 px-6 py-3 rounded-2xl border border-coffee-100">
+                        <p className="text-[9px] font-black text-coffee-400 uppercase tracking-widest">Active Units</p>
+                        <p className="text-xl font-black text-coffee-900">{vehicles.filter(v => v.status === 'Active').length}</p>
+                    </div>
+                    <div className="bg-coffee-50/50 px-6 py-3 rounded-2xl border border-coffee-100">
+                        <p className="text-[9px] font-black text-coffee-400 uppercase tracking-widest">Total Payload</p>
+                        <p className="text-xl font-black text-coffee-900">{vehicles.reduce((acc, v) => acc + (parseFloat(v.capacity) || 0), 0).toLocaleString()} <span className="text-[10px]">KG</span></p>
+                    </div>
+                </div>
+            </div>
+
             {activeTab === 'ASSIGNMENTS' ? (
                 <VehicleAssignments />
             ) : (
@@ -264,31 +292,25 @@ export default function VehicleManagement() {
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-3">
-                                                <p className="text-2xl font-black text-coffee-950 tracking-wider font-mono">{v.plate_number}</p>
+                                                <p className="text-3xl font-black text-coffee-950 tracking-wider font-mono">{v.plate_number}</p>
                                                 {v.is_refrigerated && <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-2.5 py-1 rounded-lg border border-blue-100 uppercase tracking-widest flex items-center gap-1.5 shadow-sm">❄️ Cold Chain</span>}
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-3 mt-2 font-semibold text-coffee-500 text-sm">
-                                                <span className="bg-coffee-50 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight border border-coffee-100/50">{v.vehicle_type}</span>
-                                                <span className="text-coffee-200">/</span>
-                                                <span className="text-coffee-700">{v.make_model}</span>
-                                                <span className="bg-white border border-coffee-100 text-coffee-400 text-[10px] px-2 py-0.5 rounded-md shadow-sm">{v.year}</span>
+                                            <div className="flex flex-col gap-1 mt-2">
+                                                <div className="flex items-center gap-2 text-lg font-black text-coffee-700">
+                                                    <span className="text-coffee-300">|</span> <span className="uppercase tracking-widest text-xs text-coffee-500">OP:</span> {v.driver_name || 'UNASSIGNED'}
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-3 font-semibold text-coffee-500 text-sm">
+                                                    <span className="bg-coffee-50 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-tight border border-coffee-100/50">{v.vehicle_type}</span>
+                                                    <span className="text-coffee-200">/</span>
+                                                    <span className="text-coffee-800 text-lg">{v.make_model}</span>
+                                                    <span className="bg-white border border-coffee-100 text-coffee-500 text-xs px-2 py-0.5 rounded-md shadow-sm font-black">{v.year}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
 
                                     <div className="flex flex-wrap items-center justify-between lg:justify-end gap-6 sm:gap-10">
-                                        <div className="bg-coffee-50/50 p-4 rounded-[20px] border border-coffee-100/50 flex gap-6">
-                                            <div className="text-center">
-                                                <p className="text-[9px] font-black text-coffee-400 uppercase tracking-widest mb-1">Max Weight</p>
-                                                <p className="text-sm font-black text-coffee-900">{v.capacity}<span className="text-[10px] font-bold ml-0.5">KG</span></p>
-                                            </div>
-                                            {v.volume && (
-                                                <div className="text-center border-l border-coffee-100 pl-6">
-                                                    <p className="text-[9px] font-black text-coffee-400 uppercase tracking-widest mb-1">Max Volume</p>
-                                                    <p className="text-sm font-black text-coffee-900">{v.volume}<span className="text-[10px] font-bold ml-0.5">m³</span></p>
-                                                </div>
-                                            )}
-                                        </div>
+
 
                                         <VehicleStatusBadge status={v.status} />
 
@@ -301,7 +323,13 @@ export default function VehicleManagement() {
                                                 <BiPencil className="text-xl" />
                                             </button>
                                             <button 
-                                                onClick={() => setDeleteTarget(v)}
+                                                onClick={() => {
+                                                    if ((v.current_load_weight || 0) > 0) {
+                                                        toast.error("Cannot decommission: Vehicle is assigned to an active shipment.");
+                                                    } else {
+                                                        setDeleteTarget(v);
+                                                    }
+                                                }}
                                                 className="w-12 h-12 flex items-center justify-center rounded-[18px] border border-coffee-100 text-coffee-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100 transition-all shadow-sm"
                                                 title="Decommission Asset"
                                             >
@@ -330,12 +358,19 @@ export default function VehicleManagement() {
             <ConfirmationModal 
                 isOpen={!!deleteTarget}
                 title="Decommission Asset"
-                message={deleteTarget ? `Are you sure you want to decommission ${deleteTarget.plate_number}? This action will permanently remove the unit from active inventory.` : ''}
-                confirmText="Confirm Decommission"
+                message={deleteTarget ? (deleteTarget.driver_name ? `This item is currently bound. Do you want to revoke the binding and delete it?` : `Are you sure you want to decommission ${deleteTarget.plate_number}? This action will permanently remove the unit from active inventory.`) : ''}
+                confirmText={deleteTarget?.driver_name ? "Revoke Binding & Delete" : "Confirm Decommission"}
                 cancelText="Abort"
                 onConfirm={async () => {
                     if (deleteTarget) {
                         try {
+                            if (deleteTarget.driver_name) {
+                                try {
+                                    await api.patch(`vehicles/${deleteTarget.id}/`, { assignedDriver: null });
+                                } catch (e) {
+                                    // ignore unbind error if it still lets us delete
+                                }
+                            }
                             await api.delete(`vehicles/${deleteTarget.id}/`);
                             toast.success("Asset Decommissioned");
                             fetchVehicles();

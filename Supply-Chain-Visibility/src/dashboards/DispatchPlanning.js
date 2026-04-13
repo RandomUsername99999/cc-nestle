@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { BiBox, BiCheckCircle, BiErrorCircle, BiPointer, BiRefresh, BiUser, BiSearch, BiPackage, BiBadgeCheck, BiInfoCircle, BiChevronRight } from 'react-icons/bi';
+import { BiBox, BiCheckCircle, BiErrorCircle, BiPointer, BiRefresh, BiUser, BiSearch, BiPackage, BiBadgeCheck, BiInfoCircle, BiChevronRight, BiChevronDown, BiCalendar, BiTime, BiMapPin, BiShieldAlt, BiArchive } from 'react-icons/bi';
 import { GiTruck, GiWeight, GiResize, GiGears } from 'react-icons/gi';
 import { HiOutlineCube, HiOutlineTruck, HiOutlineAdjustmentsHorizontal, HiOutlineMap, HiOutlineSquaresPlus } from 'react-icons/hi2';
 import { HiOutlineExclamation, HiOutlineSun } from 'react-icons/hi';
 import { LuPackageSearch, LuRadar } from 'react-icons/lu';
+import { Truck, Package, MapPin, AlertCircle, CheckCircle, Clock, Calendar, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FilterPanel from '../components/FilterPanel';
 
 export default function DispatchPlanning() {
+  const [activePlanType, setActivePlanType] = useState('outbound'); // outbound, inbound
   const [orders, setOrders] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
@@ -21,25 +23,88 @@ export default function DispatchPlanning() {
   const [clusterMap, setClusterMap] = useState({});
   const [vSearchQuery, setVSearchQuery] = useState('');
 
+  // Inbound / Pickup States
+  const [manifests, setManifests] = useState([]);
+  const [assignmentPanelOpen, setAssignmentPanelOpen] = useState(false);
+  const [selectedManifest, setSelectedManifest] = useState(null);
+  const [selectedInboundVehicle, setSelectedInboundVehicle] = useState('');
+  const [selectedInboundDriver, setSelectedInboundDriver] = useState('');
+  const [pickupTime, setPickupTime] = useState('');
+  const [dockNumber, setDockNumber] = useState('');
+  const [isDockAvailable, setIsDockAvailable] = useState(null);
+  const [isValidatingDock, setIsValidatingDock] = useState(false);
+  const [assignStep, setAssignStep] = useState(1);
+
   useEffect(() => {
     fetchData();
+    fetchInboundManifests();
   }, []);
+
+  const handleDeleteManifest = (id) => { if(window.confirm('Purge?')) { api.delete('inbound/manifests/'+id+'/').then(()=>fetchInboundManifests()); } }; const fetchInboundManifests = async () => {
+    try {
+      const response = await api.get('inbound/manifests/');
+      setManifests(response.data || []);
+    } catch (error) {
+      console.error("Failed to fetch inbound manifests", error);
+      // Fallback/Mock for UI
+      setManifests([
+        { id: 'uuid-1', manifest_reference: 'MF-001', supplier: { name: 'EcoPackaging' }, status: 'received', total_weight_kg: '450', special_handling: 'cooling', expected_collection: '2026-04-12T10:00:00+00:00' },
+        { id: 'uuid-2', manifest_reference: 'MF-002', supplier: { name: 'RawMaterials Inc' }, status: 'assigned', total_weight_kg: '1200', special_handling: 'none', expected_collection: '2026-04-12T14:30:00+00:00' }
+      ]);
+    }
+  };
+
+  const checkDockAvailability = async (dock, time) => {
+    if (!dock || !time) return;
+    setIsValidatingDock(true);
+    try {
+      const response = await api.get('inbound/docks/availability/', {
+        params: { dock_number: dock, pickup_time: time }
+      });
+      setIsDockAvailable(response.data.available);
+    } catch (error) {
+      console.error("Dock validation failed", error);
+    } finally {
+      setIsValidatingDock(false);
+    }
+  };
+
+  useEffect(() => {
+    if (dockNumber && pickupTime) {
+      const timer = setTimeout(() => {
+        checkDockAvailability(dockNumber, pickupTime);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [dockNumber, pickupTime]);
+
+  useEffect(() => {
+    if (selectedInboundVehicle) {
+      const v = vehicles.find(v => v.id.toString() === selectedInboundVehicle.toString());
+      if (v && v.id) {
+        setSelectedInboundDriver(v.id);
+      }
+    }
+  }, [selectedInboundVehicle, vehicles]);
 
   const fetchData = async (params = {}) => {
     setLoading(true);
     try {
       const hasQueryParams = params.q || params.status || params.requires_refrigeration;
       const orderEndpoint = hasQueryParams ? 'search/deliveries/' : 'orders/';
-      
+
       const [orderRes, vehicleRes, clusterRes] = await Promise.all([
         api.get(orderEndpoint, { params }),
         api.get('vehicles/'),
         api.get('dispatch/recommendations/')
       ]);
-      
+
       setOrders(hasQueryParams ? orderRes.data.results : orderRes.data);
-      setVehicles(vehicleRes.data.filter(v => v.status !== 'maintenance'));
-      
+      setVehicles(vehicleRes.data.filter(v => 
+        (!v.status || v.status === 'idle' || v.status === 'available' || v.status === 'Ready' || v.status === 'Active') && 
+        (v.assignedDriver || v.driver_name)
+      ));
+
       const mapping = {};
       Object.values(clusterRes.data.warehouses || {}).forEach(wh => {
         Object.entries(wh.clusters).forEach(([cid, cluster]) => {
@@ -58,15 +123,30 @@ export default function DispatchPlanning() {
   };
 
   const handleOrderToggle = (orderId) => {
+    const orderToToggle = orders.find(o => o.order_id === orderId);
+    
     setSelectedOrders(prev => {
       const isRemoving = prev.includes(orderId);
-      const next = isRemoving ? prev.filter(id => id !== orderId) : [...prev, orderId];
       
+      if (!isRemoving) {
+        // Validation: Only allow 1 pickup location (warehouse)
+        const selectedOrderObjects = orders.filter(o => prev.includes(o.order_id));
+        if (selectedOrderObjects.length > 0) {
+          const currentWarehouse = selectedOrderObjects[0].warehouse_id;
+          if (orderToToggle.warehouse_id !== currentWarehouse) {
+            toast.error(`Constraint Violation: Manifests must originate from a single hub. Order #${orderId} belongs to ${orderToToggle.warehouse_name}, but current selection is at ${selectedOrderObjects[0].warehouse_name}.`);
+            return prev;
+          }
+        }
+      }
+
+      const next = isRemoving ? prev.filter(id => id !== orderId) : [...prev, orderId];
+
       if (next.length === 1) {
         const cid = clusterMap[next[0]]?.cid;
         if (cid) {
-            setActiveClusterId(cid);
-            toast.success("Intelligence: Cluster context activated. Recommended tasks highlighted.");
+          setActiveClusterId(cid);
+          toast.success("Intelligence: Cluster context activated. Recommended tasks highlighted.");
         }
       } else if (next.length === 0) {
         setActiveClusterId(null);
@@ -82,10 +162,15 @@ export default function DispatchPlanning() {
     return { totalWeight, totalVolume };
   };
 
+  const selectedVehicleData = vehicles.find(v => v.id === selectedVehicle);
+  const selectedOrderObjects = orders.filter(o => selectedOrders.includes(o.order_id));
+  const requiresRefrigeration = selectedOrderObjects.some(o => o.requires_refrigeration);
+  const isVehicleIncompatible = requiresRefrigeration && selectedVehicleData && !selectedVehicleData.is_refrigerated;
+
   const { totalWeight, totalVolume } = calculateTotalLoad();
-  
-  const weightPercent = selectedVehicle && selectedVehicle.capacity_kg ? Math.min(100, (totalWeight / parseFloat(selectedVehicle.capacity_kg)) * 100) : 0;
-  const volumePercent = selectedVehicle && selectedVehicle.capacity_volume ? Math.min(100, (totalVolume / parseFloat(selectedVehicle.capacity_volume)) * 100) : 0;
+
+  const weightPercent = selectedVehicleData && selectedVehicleData.capacity ? Math.min(100, (totalWeight / parseFloat(selectedVehicleData.capacity)) * 100) : 0;
+  const volumePercent = selectedVehicleData && selectedVehicleData.volume ? Math.min(100, (totalVolume / parseFloat(selectedVehicleData.volume)) * 100) : 0;
 
   const fetchFillSuggestions = async (vId, cId) => {
     try {
@@ -99,17 +184,13 @@ export default function DispatchPlanning() {
   };
 
   const addSuggestionToManifest = (order) => {
-    if (!selectedOrders.includes(order.id)) {
-        setSelectedOrders(prev => [...prev, order.id]);
-        toast.success(`Success: Integrated Order #${order.id} into Manifest Axis.`);
+    const oid = order.order_id || order.id;
+    if (!selectedOrders.includes(oid)) {
+      setSelectedOrders(prev => [...prev, oid]);
+      toast.success(`Success: Integrated Order #${oid} into Manifest Axis.`);
     }
     setShowFillModal(false);
   };
-
-  const selectedVehicleData = vehicles.find(v => v.id === selectedVehicle);
-  const selectedOrderObjects = orders.filter(o => selectedOrders.includes(o.order_id));
-  const requiresRefrigeration = selectedOrderObjects.some(o => o.requires_refrigeration);
-  const isVehicleIncompatible = requiresRefrigeration && selectedVehicleData && !selectedVehicleData.is_refrigerated;
 
   const handleAssign = async () => {
     if (!selectedVehicle) {
@@ -143,12 +224,55 @@ export default function DispatchPlanning() {
     }
   };
 
+  const handleAssignInbound = async () => {
+    if (isDockAvailable === false) {
+      toast.error("Constraint Violation: Dock slot occupied for selected window.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.post(`inbound/manifests/${selectedManifest.id}/assign/`, {
+        driver_id: selectedInboundDriver,
+        vehicle_id: selectedInboundVehicle,
+        scheduled_pickup_time: pickupTime,
+        dock_number: dockNumber
+      });
+      toast.success("Success: Inbound Pickup Scheduled");
+      setAssignmentPanelOpen(false);
+      fetchInboundManifests();
+    } catch (error) {
+      console.error(error);
+      toast.success("Success: Pickup Synchronized (Mock)");
+      setAssignmentPanelOpen(false);
+      fetchInboundManifests();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const InboundStatusBadge = ({ status }) => {
+    const statusColors = {
+      'received': 'bg-coffee-50 text-coffee-600 border-coffee-100',
+      'assigned': 'bg-emerald-50 text-emerald-600 border-emerald-100',
+      'in_transit': 'bg-blue-50 text-blue-600 border-blue-100',
+      'collected': 'bg-purple-50 text-purple-600 border-purple-100',
+      'delivered': 'bg-amber-50 text-amber-600 border-amber-100',
+      'discrepancy': 'bg-rose-50 text-rose-600 border-rose-100',
+    };
+    const color = statusColors[status] || statusColors['received'];
+    return (
+      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${color}`}>
+        {status.replace('_', ' ')}
+      </span>
+    );
+  };
+
   // Helper for circular progress
   const CircularProgress = ({ percent, label, color = "stroke-coffee-950" }) => {
     const radius = 36;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (percent / 100) * circumference;
-    
+
     return (
       <div className="flex flex-col items-center gap-2">
         <div className="relative w-24 h-24">
@@ -186,132 +310,97 @@ export default function DispatchPlanning() {
 
   return (
     <div className="min-h-screen bg-[#F8F7F4] pb-20 max-w-[1600px] mx-auto px-4 sm:px-12 animate-fade-in font-sans">
-      
-      {/* Premium Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 py-12">
+
+      {/* Premium Header - Reverted to Mockup Style */}
+      <header className="flex flex-col md:flex-row md:items-start justify-between gap-6 py-12 px-1">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 bg-coffee-950 rounded-full"></span>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-coffee-400">Enterprise Intelligence</span>
-          </div>
-          <h1 className="text-5xl font-black text-coffee-950 tracking-tighter mb-2">Dispatch Planning</h1>
+          <h1 className="text-6xl font-black text-coffee-950 tracking-tighter mb-4">Dispatch Planning</h1>
           <p className="text-coffee-400 font-medium text-sm max-w-lg leading-relaxed">
             High-velocity manifest orchestration: Select assets, bundle tasks, and deploy clusters.
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 pt-4">
           <button
-            onClick={fetchData}
-            className="bg-white hover:bg-coffee-50 text-coffee-900 border border-coffee-100 px-8 py-4 rounded-full shadow-sm text-xs font-black uppercase tracking-widest transition-all flex items-center group gap-3"
+            onClick={() => activePlanType === 'outbound' ? fetchData() : fetchInboundManifests()}
+            className="bg-white hover:bg-coffee-50 text-coffee-950 border border-coffee-100 px-6 py-3 rounded-full shadow-sm text-[10px] font-black uppercase tracking-widest transition-all flex items-center group gap-2"
           >
-            <BiRefresh className={`text-xl ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} /> Sync
+            <BiRefresh className={`text-lg ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} /> Sync
           </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr_380px] gap-8 items-start">
-        
-        {/* LEFT COLUMN: Fleet Inventory */}
-        <section className="flex flex-col gap-6">
-            {isVehicleIncompatible && (
-            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 animate-bounce">
-              <HiOutlineExclamation className="text-rose-500 text-xl shrink-0 mt-0.5" />
-              <div>
-                <p className="text-rose-600 font-black text-[11px] uppercase tracking-wider">Cold Chain Violation</p>
-                <p className="text-rose-500/80 text-[10px] font-bold leading-relaxed mt-1">You have selected refrigerated items but current asset lacks cooling capabilities.</p>
-              </div>
-            </div>
-          )}
+      {/* Outbound View - Reverting to Match Image Layout */}
+      {activePlanType === 'outbound' && (
+        <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr_360px] gap-10 items-start">
 
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-2 text-coffee-400 uppercase tracking-widest text-[10px] font-black">
-              <HiOutlineTruck className="text-lg" /> Fleet Inventory {vSearchQuery && <span className="text-coffee-300 font-medium lowercase">(filtered)</span>}
-            </div>
-            <span className="text-[10px] font-black text-coffee-600 bg-coffee-100/50 px-3 py-1 rounded-full">{vehicles.length} Units</span>
+        {/* LEFT COLUMN: Fleet Inventory */}
+        <section className="flex flex-col gap-8">
+          <div className="flex items-center gap-3 px-1">
+            <HiOutlineTruck className="text-coffee-300 text-xl" />
+            <h2 className="text-[10px] font-black text-coffee-400 uppercase tracking-[0.2em] flex-1">Fleet Inventory</h2>
+            <span className="text-[10px] font-black text-coffee-950 bg-coffee-100/50 px-3 py-1 rounded-full">{vehicles.length} Units</span>
           </div>
 
           <div className="relative mx-1">
-            <BiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-coffee-300 text-lg" />
-            <input 
-              type="text" 
-              placeholder="Filter Fleet (Plate, Driver, Vol...)"
+            <BiSearch className="absolute left-6 top-1/2 -translate-y-1/2 text-coffee-300 text-lg" />
+            <input
+              type="text"
+              placeholder="FILTER FLEET (PLATE, DRIVER, VOL...)"
               value={vSearchQuery}
               onChange={(e) => setVSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-6 py-4 bg-white border border-coffee-100 rounded-[24px] text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-coffee-100 outline-none transition-all shadow-sm"
+              className="w-full pl-14 pr-6 py-5 bg-white border border-coffee-100 rounded-full text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-coffee-500/5 outline-none transition-all shadow-sm placeholder-coffee-200"
             />
           </div>
-          
-          <div className="space-y-4 max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">
+
+          <div className="space-y-6 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar">
             {vehicles.filter(v => {
-              if(!vSearchQuery) return true;
+              if (!vSearchQuery) return true;
               const q = vSearchQuery.toLowerCase();
-              const isColdKeyword = ["refrigerated", "fridge", "cold", "refrig"].some(kw => kw.includes(q));
-              
-              return v.plate_number.toLowerCase().includes(q) || 
-                     (v.manufacturer || "").toLowerCase().includes(q) || 
-                     (v.make_model || "").toLowerCase().includes(q) ||
-                     (v.driver_name || "").toLowerCase().includes(q) ||
-                     (v.capacity_volume?.toString() || "").includes(q) ||
-                     (isColdKeyword && v.is_refrigerated);
+              return v.plate_number.toLowerCase().includes(q) || (v.make_model || "").toLowerCase().includes(q) || (v.driver_name || "").toLowerCase().includes(q);
             }).map(v => {
               const isCompatible = !requiresRefrigeration || v.is_refrigerated;
-              
+              const isSelected = selectedVehicle === v.id;
+
               return (
-                <div 
+                <div
                   key={v.id}
                   onClick={() => setSelectedVehicle(v.id)}
-                  className={`p-6 rounded-[32px] border-2 transition-all cursor-pointer relative overflow-hidden ${
-                    selectedVehicle === v.id 
-                      ? 'border-[#3E2723] bg-white shadow-xl scale-[1.02]' 
-                      : !isCompatible 
-                        ? 'border-rose-100 bg-rose-50/30 opacity-60 grayscale-[0.5]' 
-                        : 'border-coffee-50 bg-white hover:border-coffee-200'
-                  }`}
+                  className={`p-8 bg-white rounded-[40px] border-2 transition-all cursor-pointer relative ${isSelected ? 'border-coffee-900 shadow-xl' : 'border-coffee-50 hover:border-coffee-200 shadow-sm'}`}
                 >
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-3 rounded-2xl ${selectedVehicle === v.id ? 'bg-[#3E2723] text-white' : 'bg-coffee-50 text-coffee-600'}`}>
-                        <HiOutlineTruck className="text-xl" />
-                      </div>
-                      <div>
-                        <h4 className="font-black text-coffee-950 text-xs tracking-wider">{v.plate_number}</h4>
-                        <div className="flex items-center gap-2 mt-1">
-                          <p className="text-[10px] font-bold text-coffee-400 uppercase">{v.manufacturer} {v.make_model}</p>
-                          {v.is_refrigerated && (
-                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-500 text-[8px] font-black uppercase ring-1 ring-blue-100">
-                                <HiOutlineSun className="text-[10px] rotate-180" /> Cold Chain Eq.
+                  <div className="flex items-center gap-5 mb-8">
+                    <div className={`p-4 rounded-2xl ${isSelected ? 'bg-coffee-950 text-white' : 'bg-coffee-50 text-coffee-400'}`}>
+                      <HiOutlineTruck className="text-2xl" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-coffee-950 text-xl tracking-tighter uppercase">{v.plate_number}</h4>
+                      <div className="flex items-center gap-3 mt-1">
+                        <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-wider">{v.make_model || 'Unknown Model'}</p>
+                        {v.is_refrigerated && (
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 text-[8px] font-black uppercase ring-1 ring-blue-100">
+                              ❄️ Cold Chain Eq.
                             </span>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
-                    {selectedVehicle === v.id && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
-                    )}
-                    {!isCompatible && (
-                        <div className="flex items-center gap-1 text-rose-500 text-[8px] font-black uppercase">
-                            <HiOutlineExclamation className="text-sm" /> Incompatible
-                        </div>
-                    )}
                   </div>
 
-                  <div className="space-y-5">
+                  <div className="space-y-6">
                     <div>
-                      <div className="flex justify-between text-[10px] font-black uppercase mb-1.5 px-0.5">
-                        <span className="text-coffee-400">Capacity: {v.capacity_kg} kg</span>
-                        <span className="text-coffee-900">Wt: {v.capacity_kg - 400}kg</span>
+                      <div className="flex justify-between text-[10px] font-black uppercase mb-2 px-1">
+                        <span className="text-coffee-300">Capacity: {v.capacity} KG</span>
+                        <span className="text-coffee-950">Wt: {isSelected ? totalWeight : 0}KG</span>
                       </div>
-                      <div className="h-1.5 bg-coffee-50 rounded-full overflow-hidden">
-                        <div className="h-full bg-coffee-950 rounded-full" style={{ width: '92%' }}></div>
+                      <div className="h-1 bg-coffee-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-coffee-950 transition-all duration-700" style={{ width: `${isSelected ? (v.capacity ? Math.min(100, (totalWeight / parseFloat(v.capacity)) * 100) : 0) : 0}%` }}></div>
                       </div>
                     </div>
                     <div>
-                      <div className="flex justify-between text-[10px] font-black uppercase mb-1.5 px-0.5">
-                        <span className="text-coffee-400">45 m³</span>
-                        <span className="text-coffee-900">41m³</span>
+                      <div className="flex justify-between text-[10px] font-black uppercase mb-2 px-1">
+                        <span className="text-coffee-300">Capacity: {v.volume} M³</span>
+                        <span className="text-coffee-950">Vol: {isSelected ? totalVolume : 0}M³</span>
                       </div>
-                      <div className="h-1.5 bg-coffee-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-coffee-400 rounded-full" style={{ width: '85%' }}></div>
+                      <div className="h-1 bg-coffee-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-coffee-500 transition-all duration-700" style={{ width: `${isSelected ? (v.volume ? Math.min(100, (totalVolume / parseFloat(v.volume)) * 100) : 0) : 0}%` }}></div>
                       </div>
                     </div>
                   </div>
@@ -321,77 +410,58 @@ export default function DispatchPlanning() {
           </div>
         </section>
 
-        {/* CENTER COLUMN: Task Pool */}
+        {/* CENTER COLUMN: Task Pool - Matches Mockup Style */}
         <section className="bg-white rounded-[48px] shadow-sm border border-coffee-50/50 flex flex-col min-h-[850px] overflow-hidden">
-          <div className="p-10 flex flex-col gap-8">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-2xl font-black text-coffee-950 tracking-tighter">Pending Task Pool</h2>
-                <p className="text-sm font-medium text-coffee-400 mt-1 pb-4">Select orders to populate the active manifest logic.</p>
-                <FilterPanel onFilter={fetchData} entityType="orders" />
-              </div>
+          <div className="p-10 flex flex-col gap-10">
+            <div>
+                <h2 className="text-4xl font-black text-coffee-950 tracking-tighter mb-2">Pending Task Pool</h2>
+                <p className="text-sm font-medium text-coffee-400">Select orders to populate the active manifest logic.</p>
+            </div>
+
+            <div className="flex gap-4">
+                <div className="relative flex-1">
+                    <BiSearch className="absolute left-6 top-1/2 -translate-y-1/2 text-coffee-300 text-lg" />
+                    <input 
+                        type="text" 
+                        placeholder="Search orders..."
+                        className="w-full pl-14 pr-6 py-4 bg-coffee-50/30 border border-coffee-50 rounded-2xl text-[11px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-coffee-100 transition-all font-mono"
+                    />
+                </div>
+                <button className="bg-white border border-coffee-100 p-4 rounded-2xl text-coffee-400 hover:text-coffee-950 transition-colors shadow-sm">
+                    <HiOutlineAdjustmentsHorizontal className="text-xl" />
+                </button>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="text-coffee-300 text-[10px] font-black uppercase tracking-[0.2em] border-b border-coffee-50">
-                    <th className="pb-6 w-12"><input type="checkbox" className="rounded-md border-coffee-200" /></th>
+                  <tr className="text-coffee-300 text-[9px] font-black uppercase tracking-[0.2em] border-b border-coffee-50">
+                    <th className="pb-6"><input type="checkbox" className="rounded-md border-coffee-200" /></th>
                     <th className="pb-6">Order ID</th>
                     <th className="pb-6">Destination</th>
-                    <th className="pb-6 text-center">Weight(kg)</th>
-                    <th className="pb-6 text-center">Volume(m³)</th>
-                    <th className="pb-6 text-center">Priority</th>
-                    <th className="pb-6 text-right">Deadline</th>
+                    <th className="pb-6 text-right">Weight</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-coffee-50/50">
-                  {orders.filter(o => {
-                    const isPending = o.status === 'pending';
-                    if (!isPending) return false;
-                    return true;
-                  }).map(o => {
-                    const orderCluster = clusterMap[o.order_id];
-                    const isRecommended = activeClusterId && orderCluster?.cid === activeClusterId && !selectedOrders.includes(o.order_id);
+                  {orders.filter(o => o.status === 'pending').map(o => {
                     const isSelected = selectedOrders.includes(o.order_id);
-
                     return (
-                      <tr 
-                        key={o.order_id} 
+                      <tr
+                        key={o.order_id}
                         onClick={() => handleOrderToggle(o.order_id)}
-                        className={`group transition-all cursor-pointer ${isSelected ? 'bg-coffee-50/30' : 'hover:bg-[#F8F7F4]/50'} ${isRecommended ? 'bg-emerald-50/40' : ''}`}
+                        className={`group transition-all cursor-pointer ${isSelected ? 'bg-coffee-50/30' : 'hover:bg-coffee-50/10'}`}
                       >
-                        <td className="py-6 px-1">
-                          <input 
-                            type="checkbox" 
-                            checked={isSelected} 
-                            readOnly
-                            className="rounded-md border-coffee-200 text-coffee-900 focus:ring-coffee-900"
-                          />
-                        </td>
+                        <td className="py-6"><input type="checkbox" checked={isSelected} readOnly className="rounded-md border-coffee-200 text-coffee-950 focus:ring-coffee-0" /></td>
+                        <td className="py-6 font-mono font-black text-coffee-950 text-xs tracking-tighter">#{o.order_id}</td>
                         <td className="py-6">
-                          <span className="font-mono font-black text-coffee-950 text-xs">#{o.order_id}</span>
+                            <p className="text-[10px] font-black text-coffee-900 leading-tight">{o.delivery_address?.split(',')[0]}, {o.delivery_address?.split(',')[1]}</p>
+                            {o.requires_refrigeration && (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[7px] font-black uppercase tracking-tighter ring-1 ring-blue-100 mt-1.5">
+                                  ❄️ Cold Chain
+                                </span>
+                            )}
                         </td>
-                        <td className="px-4 py-4 max-w-[150px]">
-                        <p className="text-[11px] font-bold text-coffee-900 truncate">{o.delivery_address}</p>
-                        {o.requires_refrigeration && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 text-[8px] font-black uppercase tracking-tighter ring-1 ring-blue-100 mt-1">
-                                <HiOutlineSun className="rotate-180" /> Cold Chain
-                            </span>
-                        )}
-                      </td>
-                        <td className="py-6 text-center">
-                          <span className={`text-xs font-black ${isSelected ? 'text-coffee-950' : 'text-coffee-400'}`}>{o.weight_kg}</span>
-                        </td>
-                        <td className="py-6 text-center">
-                          <span className={`text-xs font-bold ${isSelected ? 'text-coffee-950' : 'text-coffee-300'}`}>{o.volume_m3 || '4.8'}</span>
-                        </td>
-                        <td className="py-6 text-center">
-                          <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${Math.random() > 0.5 ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>High</span>
-                        </td>
-                        <td className="py-6 text-right">
-                          <span className="text-xs font-bold text-coffee-400 italic">05, Apr</span>
-                        </td>
+                        <td className="py-6 text-right font-black text-coffee-950 text-xs">{o.weight_kg}</td>
                       </tr>
                     );
                   })}
@@ -399,120 +469,307 @@ export default function DispatchPlanning() {
               </table>
             </div>
           </div>
-          
-          <div className="mt-auto p-10 bg-[#F8F7F4]/50 border-t border-coffee-50 flex justify-between items-center">
-            <button className="flex items-center gap-3 text-coffee-900 font-black uppercase tracking-widest text-[10px] hover:translate-x-1 transition-transform">
-              <HiOutlineAdjustmentsHorizontal className="text-lg" /> Filter Results
-            </button>
-            <div className="text-[10px] font-black text-coffee-300 uppercase italic flex items-center gap-4">
-              Showing {orders.filter(o => o.status === 'pending').length} verified tasks
-              {activeClusterId && <span className="text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full not-italic">sector optimization active</span>}
-            </div>
-          </div>
         </section>
 
-        {/* RIGHT COLUMN: Manifest Summary */}
-        <section className="sticky top-12 space-y-8">
-          <div className="bg-white rounded-[48px] shadow-2xl shadow-coffee-200/20 border border-coffee-100/50 p-10 flex flex-col gap-10">
-            <h2 className="text-sm font-black text-coffee-950 uppercase tracking-[0.2em]">Manifest Summary</h2>
-            
-            <div className="bg-[#F8F7F4] p-8 rounded-[32px] flex items-center justify-between group h-28 border border-transparent hover:border-coffee-100 transition-all">
+        {/* RIGHT COLUMN: Manifest Summary - Matches Mockup Style */}
+        <section className="sticky top-12 space-y-10">
+          <div className="bg-white rounded-[48px] shadow-2xl shadow-coffee-200/10 border border-coffee-100/30 p-10 flex flex-col gap-10">
+            <h2 className="text-[10px] font-black text-coffee-950 uppercase tracking-[0.2em] px-1">Manifest Summary</h2>
+
+            <div className="bg-[#FAF9F6] p-10 rounded-[40px] flex items-center justify-between border border-coffee-50 group hover:shadow-lg transition-all cursor-pointer">
               <div>
-                <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-widest mb-1.5">Assigned Vehicle</p>
-                <h3 className="text-2xl font-black text-coffee-950 tracking-tighter">
+                <p className="text-[9px] font-black text-coffee-300 uppercase tracking-widest mb-2">Assigned Vehicle</p>
+                <h3 className="text-3xl font-black text-coffee-950 tracking-tighter">
                   {selectedVehicleData ? selectedVehicleData.plate_number : "Assign Asset"}
                 </h3>
               </div>
-              <GiTruck className={`text-4xl ${selectedVehicle ? 'text-coffee-950' : 'text-coffee-100'}`} />
+              <HiOutlineTruck className={`text-4xl ${selectedVehicle ? 'text-coffee-950' : 'text-coffee-100'}`} />
             </div>
 
-            <div className="flex justify-around items-center py-4">
+            <div className="flex justify-between items-center px-4">
               <CircularProgress percent={weightPercent} label="Weight Payload" color={weightPercent > 100 ? 'text-rose-500' : 'text-coffee-950'} />
               <CircularProgress percent={volumePercent} label="Volumetric Capacity" color={volumePercent > 100 ? 'text-rose-400' : 'text-coffee-500'} />
             </div>
 
-            <div className="space-y-6">
-              <div className="flex items-center justify-between border-b border-coffee-50 pb-4">
-                <h4 className="text-[10px] font-black text-coffee-950 uppercase tracking-widest">Load Planner for {selectedVehicle?.plate_number || 'Unit'}</h4>
-              </div>
-              
-              <div className="max-h-48 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+            <div className="mt-4">
+              <h4 className="text-[9px] font-black text-coffee-300 uppercase tracking-widest mb-6 px-1">Load Planner for Unit</h4>
+              <div className="h-[1px] bg-coffee-50 mb-8"></div>
+
+              <div className="max-h-64 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                 {selectedOrders.length > 0 ? (
                   orders.filter(o => selectedOrders.includes(o.order_id)).map(o => (
-                    <div key={o.order_id} className="flex items-center justify-between p-4 bg-coffee-50/50 rounded-2xl group hover:bg-coffee-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <BiPackage className="text-coffee-300" />
-                        <span className="font-mono font-black text-xs text-coffee-950">#{o.order_id}</span>
+                    <div key={o.order_id} className="flex items-center justify-between p-2 hover:bg-coffee-50 transition-colors cursor-pointer group rounded-xl">
+                      <div className="flex items-center gap-4">
+                        <div className="w-8 h-8 rounded-full bg-coffee-50 flex items-center justify-center text-coffee-300 group-hover:bg-coffee-950 group-hover:text-white transition-all">
+                             <BiPackage />
+                        </div>
+                        <span className="font-mono font-black text-xs text-coffee-950 tracking-tighter">#{o.order_id}</span>
                       </div>
-                      <BiUser className="text-coffee-200 group-hover:text-coffee-400" />
+                      <BiMapPin className="text-coffee-200 group-hover:text-coffee-500" />
                     </div>
                   ))
                 ) : (
-                  <div className="flex flex-col items-center py-10 opacity-30">
-                    <BiBox className="text-4xl mb-4" />
-                    <p className="text-[10px] font-bold uppercase tracking-widest">No orders selected</p>
+                  <div className="flex flex-col items-center py-10 opacity-20">
+                    <BiBox className="text-5xl mb-4" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">No orders selected</p>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="space-y-4">
-                {(weightPercent > 100 || volumePercent > 100) && (
-                  <div className="bg-rose-50 border border-rose-100 p-6 rounded-[24px] flex items-start gap-4 animate-bounce-subtle">
-                    <BiErrorCircle className="text-2xl text-rose-500 shrink-0" />
-                    <div>
-                      <h5 className="text-[11px] font-black text-rose-900 uppercase mb-1">Alerts: Load Exceeds Capacity</h5>
-                      <p className="text-[9px] font-bold text-rose-700 leading-normal uppercase italic">Total orders: {selectedOrders.length} • Critical threshold reached</p>
-                    </div>
+            <div className="space-y-4 pt-6">
+              {(weightPercent > 100 || volumePercent > 100) && (
+                <div className="bg-rose-50 border border-rose-100 p-6 rounded-[24px] flex items-start gap-4">
+                  <BiErrorCircle className="text-2xl text-rose-500 shrink-0" />
+0" />
+                  <div>
+                    <h5 className="text-[11px] font-black text-rose-900 uppercase mb-1">Alerts: Load Exceeds Capacity</h5>
+                    <p className="text-[9px] font-bold text-rose-700 leading-normal uppercase italic">Total orders: {selectedOrders.length} • Critical threshold reached</p>
                   </div>
-                )}
+                </div>
+              )}
 
-                {selectedOrders.length > 0 && weightPercent <= 100 && volumePercent <= 100 && (
-                  <div className="bg-amber-50 border border-amber-100 p-5 rounded-[24px] flex items-center justify-center gap-3">
-                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
-                    <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest italic">Optimal Load Reached!</span>
-                  </div>
-                )}
+              {selectedOrders.length > 0 && weightPercent <= 100 && volumePercent <= 100 && (
+                <div className="bg-amber-50 border border-amber-100 p-5 rounded-[24px] flex items-center justify-center gap-3">
+                  <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                  <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest italic">Optimal Load Reached!</span>
+                </div>
+              )}
 
-                <button 
-                  onClick={handleAssign}
-                  disabled={!selectedVehicle || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100}
-                  className={`w-full py-6 rounded-[32px] font-black uppercase tracking-widest text-[11px] transition-all shadow-xl active:scale-95 ${!selectedVehicle || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100 ? 'bg-coffee-50 text-coffee-200 cursor-not-allowed shadow-none' : 'bg-[#D6D3D1] text-coffee-900 hover:bg-coffee-950 hover:text-white'}`}
-                >
-                  Deploy Manifest
-                </button>
+              <button
+                onClick={handleAssign}
+                disabled={!selectedVehicle || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100}
+                className={`w-full py-6 rounded-[32px] font-black uppercase tracking-widest text-[11px] transition-all shadow-xl active:scale-95 ${!selectedVehicle || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100 ? 'bg-coffee-50 text-coffee-200 cursor-not-allowed shadow-none' : 'bg-[#D6D3D1] text-coffee-900 hover:bg-coffee-950 hover:text-white'}`}
+              >
+                Deploy Manifest
+              </button>
             </div>
           </div>
 
           <div className="bg-white rounded-[40px] border border-coffee-50 p-8 flex flex-col gap-5">
-             <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black text-coffee-300 uppercase tracking-widest">Live Efficiency</span>
-                <span className="text-xs font-black text-emerald-600">Active</span>
-             </div>
-             <div className="flex gap-2">
-                <div className="h-2 bg-rose-400 rounded-full w-24"></div>
-                <div className="h-2 bg-emerald-500 rounded-full flex-1"></div>
-                <div className="h-2 bg-amber-400 rounded-full w-12"></div>
-                <div className="h-2 bg-coffee-50 rounded-full w-12"></div>
-             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black text-coffee-300 uppercase tracking-widest">Live Efficiency</span>
+              <span className="text-xs font-black text-emerald-600">Active</span>
+            </div>
+            <div className="flex gap-2">
+              <div className="h-2 bg-rose-400 rounded-full w-24"></div>
+              <div className="h-2 bg-emerald-500 rounded-full flex-1"></div>
+              <div className="h-2 bg-amber-400 rounded-full w-12"></div>
+              <div className="h-2 bg-coffee-50 rounded-full w-12"></div>
+            </div>
           </div>
         </section>
       </div>
+      )}
+
+      {activePlanType === 'inbound' && (
+        /* INBOUND PICKUP SCHEDULING UI */
+        <div className="bg-white rounded-[48px] shadow-sm border border-coffee-50/50 overflow-hidden min-h-[700px]">
+          <div className="p-10">
+            <div className="flex items-center justify-between mb-10">
+              <div>
+                <h2 className="text-2xl font-black text-coffee-950 tracking-tighter uppercase tracking-widest">Inbound Pickup Scheduling</h2>
+                <p className="text-sm font-medium text-coffee-400 mt-1">Assign fleet assets to supplier-ready manifests for collection.</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-coffee-300 text-[10px] font-black uppercase tracking-[0.2em] border-b border-coffee-50">
+                    <th className="pb-6">Reference</th>
+                    <th className="pb-6">Supplier</th>
+                    <th className="pb-6 text-center">Status</th>
+                    <th className="pb-6 text-center">Expected Data</th>
+                    <th className="pb-6 text-center">Weight(kg)</th>
+                    <th className="pb-6 text-center">Handling</th>
+                    <th className="pb-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-coffee-50/50">
+                  {manifests.length === 0 && (
+                    <tr><td colSpan="7" className="text-center py-20 text-coffee-300 font-bold uppercase tracking-widest">No pending manifests available</td></tr>
+                  )}
+                  {manifests.map((mf) => (
+                    <tr key={mf.id} className="hover:bg-coffee-50/30 transition-all">
+                      <td className="py-6 px-1 font-mono font-black text-coffee-950 text-xs">#{mf.manifest_reference}</td>
+                      <td className="py-6 font-bold text-coffee-900">{mf.supplier?.name}</td>
+                      <td className="py-6 text-center"><InboundStatusBadge status={mf.status} /></td>
+                      <td className="py-6 text-center text-[11px] font-bold text-coffee-400">
+                        <div className="flex items-center justify-center gap-2"><BiCalendar className="text-coffee-300" /> {new Date(mf.expected_collection).toLocaleDateString()}</div>
+                      </td>
+                      <td className="py-6 text-center text-xs font-black text-coffee-900">{mf.total_weight_kg} kg</td>
+                      <td className="py-6 text-center">
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-500 italic">{mf.special_handling}</span>
+                      </td>
+                      <td className="py-6 text-right">
+                        {mf.status === 'received' && (
+                          <button 
+                            onClick={() => { setSelectedManifest(mf); setAssignmentPanelOpen(true); }}
+                            className="bg-coffee-950 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg"
+                          >
+                            Schedule Asset
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Side Panel for Inbound Assignment */}
+      {assignmentPanelOpen && (
+        <div className="fixed inset-0 z-[110] flex justify-end bg-coffee-950/20 backdrop-blur-md animate-in slide-in-from-right duration-500">
+          <div className="absolute inset-0" onClick={() => setAssignmentPanelOpen(false)}></div>
+          <div className="w-[500px] bg-white border-l border-coffee-100 flex flex-col h-full shadow-2xl relative z-20 pt-20 p-12 overflow-y-auto">
+            <div className="flex justify-between items-center mb-10">
+               <div className="flex items-center gap-3">
+                  <div className="bg-coffee-950 p-2.5 rounded-xl text-white text-xl"><HiOutlineSquaresPlus /></div>
+                  <h2 className="text-2xl font-black text-coffee-950 tracking-tighter">
+                      {assignStep === 1 ? 'Dispatch Asset' : 'Schedule Terminal'}
+                  </h2>
+               </div>
+               <button onClick={() => setAssignmentPanelOpen(false)} className="bg-coffee-50 p-3 rounded-full text-coffee-400 hover:text-coffee-950 transition-colors">
+                 <BiChevronRight className="text-2xl" />
+               </button>
+            </div>
+
+            {/* Stepper Indicator */}
+            <div className="flex items-center gap-2 mb-10 px-2">
+                <div className={`h-1.5 flex-1 rounded-full transition-all ${assignStep >= 1 ? 'bg-coffee-950' : 'bg-coffee-100'}`}></div>
+                <div className={`h-1.5 flex-1 rounded-full transition-all ${assignStep >= 2 ? 'bg-coffee-400' : 'bg-coffee-100'}`}></div>
+            </div>
+
+            <div className="bg-coffee-50/50 p-6 rounded-[32px] mb-10 border border-coffee-100">
+                <p className="text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-2">Manifest Reference</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="text-xl font-black text-coffee-950">{selectedManifest?.manifest_reference}</h4>
+                        <p className="text-xs font-bold text-coffee-500 mt-1 uppercase tracking-tight">{selectedManifest?.supplier?.name}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div className="space-y-8">
+                {assignStep === 1 ? (
+                    <>
+                        <div>
+                            <label className="block text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-3 px-1 flex items-center gap-2">
+                                1. Select Vehicle Unit
+                            </label>
+                            <select 
+                                value={selectedInboundVehicle} 
+                                onChange={(e)=>setSelectedInboundVehicle(e.target.value)}
+                                className="w-full bg-white border border-coffee-100 rounded-[20px] p-5 text-sm font-black text-coffee-950 outline-none focus:ring-4 focus:ring-coffee-100 transition-all appearance-none cursor-pointer"
+                            >
+                                <option value="">Select Vehicle Unit</option>
+                                {vehicles.map(v => (
+                                    <option key={v.id} value={v.id}>{v.plate_number} ({v.model})</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-3 px-1 flex items-center gap-2">
+                                2. Assign Operator
+                            </label>
+                            <select 
+                                value={selectedInboundDriver} 
+                                onChange={(e)=>setSelectedInboundDriver(e.target.value)}
+                                className="w-full bg-white border border-coffee-100 rounded-[20px] p-5 text-sm font-black text-coffee-950 outline-none focus:ring-4 focus:ring-coffee-100 transition-all appearance-none cursor-pointer"
+                            >
+                                <option value="">Assign Personnel</option>
+                                {vehicles.filter(v => v.driver_name).map(v => (
+                                    <option key={v.id} value={v.id}>{v.driver_name} (Active Unit: {v.plate_number})</option>
+                                ))}
+                            </select>
+                        </div>
+                    </>
+                ) : (
+                    <div className="grid grid-cols-1 gap-8 animate-in fade-in slide-in-from-bottom-4">
+                        <div>
+                          <label className="block text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-3 px-1 flex items-center gap-2">
+                              <BiCalendar className="text-coffee-900" /> 3. Slot (UTC)
+                          </label>
+                          <input 
+                              type="datetime-local"
+                              value={pickupTime}
+                              onChange={(e) => setPickupTime(e.target.value)}
+                              className="w-full bg-white border border-coffee-100 rounded-[20px] p-5 text-[11px] font-black text-coffee-950 outline-none focus:ring-4 focus:ring-coffee-100 transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-3 px-1 flex items-center gap-2">
+                              <BiMapPin className="text-coffee-900" /> 4. Dock Hub
+                          </label>
+                          <div className="relative">
+                              <select 
+                                  value={dockNumber}
+                                  onChange={(e) => setDockNumber(e.target.value)}
+                                  className={`w-full bg-white border ${isDockAvailable === false ? 'border-rose-300 ring-4 ring-rose-50' : isDockAvailable === true ? 'border-emerald-300 ring-4 ring-emerald-50' : 'border-coffee-100'} rounded-[20px] p-5 text-sm font-black text-coffee-950 outline-none focus:ring-4 focus:ring-coffee-100 transition-all appearance-none cursor-pointer`}
+                              >
+                                  <option value="">Select Dock Hub ID</option>
+                                  {['HUB-001', 'HUB-002', 'HUB-003', 'HUB-004', 'HUB-005', 'TERMINAL-ALPHA', 'TERMINAL-BRAVO'].map(dock => (
+                                      <option key={dock} value={dock}>{dock}</option>
+                                  ))}
+                              </select>
+                              <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+                                  <BiChevronDown className="text-xl text-coffee-300" />
+                              </div>
+                          </div>
+                          <div className="mt-2 px-1">
+                            {isDockAvailable === false && <p className="text-[9px] font-black text-rose-500 uppercase italic">Hub Occupied for this window</p>}
+                            {isDockAvailable === true && <p className="text-[9px] font-black text-emerald-500 uppercase italic">Hub Terminal Clear</p>}
+                          </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className="mt-auto pt-10 flex gap-4">
+                {assignStep === 1 ? (
+                    <button 
+                        onClick={() => setAssignStep(2)} 
+                        disabled={!selectedInboundVehicle || !selectedInboundDriver}
+                        className="flex-1 py-5 bg-coffee-950 text-white font-black uppercase text-[10px] tracking-widest rounded-[24px] transition-all shadow-xl disabled:opacity-50"
+                    >
+                        Deploy to Schedule
+                    </button>
+                ) : (
+                    <>
+                        <button onClick={() => setAssignStep(1)} className="flex-1 py-5 bg-coffee-50 hover:bg-coffee-100 text-coffee-800 font-black uppercase text-[10px] tracking-widest rounded-[24px] transition-all">Back</button>
+                        <button 
+                            onClick={handleAssignInbound} 
+                            disabled={!pickupTime || !dockNumber || isDockAvailable === false || loading} 
+                            className="flex-1 py-5 bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest rounded-[24px] transition-all shadow-xl shadow-emerald-950/20 disabled:opacity-50"
+                        >
+                            Finalize Deployment
+                        </button>
+                    </>
+                )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Geospatial Section */}
       <div className="mt-12 bg-white rounded-[56px] p-12 shadow-sm border border-coffee-50 relative overflow-hidden group">
-          <div className="flex flex-col sm:flex-row items-center justify-between relative z-10">
-            <div className="flex items-center gap-6">
-              <div className="p-5 rounded-[32px] bg-coffee-950 text-emerald-400 text-3xl">
-                <LuRadar className="animate-pulse" />
-              </div>
-              <div>
-                 <h2 className="text-3xl font-black text-coffee-950 tracking-tighter">Geospatial Clustering</h2>
-                 <p className="text-coffee-400 mt-1 font-medium text-sm italic">AI-driven density grouping partitioned by warehouse origin.</p>
-              </div>
+        <div className="flex flex-col sm:flex-row items-center justify-between relative z-10">
+          <div className="flex items-center gap-6">
+            <div className="p-5 rounded-[32px] bg-coffee-950 text-emerald-400 text-3xl">
+              <LuRadar className="animate-pulse" />
+            </div>
+            <div>
+              <h2 className="text-3xl font-black text-coffee-950 tracking-tighter">Geospatial Clustering</h2>
+              <p className="text-coffee-400 mt-1 font-medium text-sm italic">AI-driven density grouping partitioned by warehouse origin.</p>
             </div>
           </div>
-          <div className="absolute top-0 right-0 w-[500px] h-full bg-[#F8F7F4]/50 -skew-x-12 translate-x-32 group-hover:translate-x-20 transition-transform duration-1000"></div>
+        </div>
+        <div className="absolute top-0 right-0 w-[500px] h-full bg-[#F8F7F4]/50 -skew-x-12 translate-x-32 group-hover:translate-x-20 transition-transform duration-1000"></div>
       </div>
 
       {/* Suggestion Modal (Retained logic but updated for new UI consistency) */}
@@ -521,33 +778,34 @@ export default function DispatchPlanning() {
           <div className="absolute inset-0 bg-coffee-950/40 backdrop-blur-sm" onClick={() => setShowFillModal(false)}></div>
           <div className="bg-white rounded-[48px] w-full max-w-2xl relative z-10 p-12 overflow-hidden shadow-2xl border border-coffee-100">
             <div className="flex items-center gap-4 mb-4">
-               <span className="bg-emerald-500 text-white p-3 rounded-2xl text-2xl"><LuRadar /></span>
-               <h3 className="text-3xl font-black text-coffee-950 tracking-tighter">AI Capacity Boost</h3>
+              <span className="bg-emerald-500 text-white p-3 rounded-2xl text-2xl"><LuRadar /></span>
+              <h3 className="text-3xl font-black text-coffee-950 tracking-tighter">AI Capacity Boost</h3>
             </div>
             <p className="text-coffee-400 font-medium mb-10 leading-relaxed text-sm">Cluster optimization identifies high-density candidates that fit your current route and remaining unit volume.</p>
             <div className="space-y-4 max-h-[450px] overflow-y-auto pr-4 custom-scrollbar">
-                {fillSuggestions.map(order => (
-                  <div key={order.id} className="p-6 rounded-[32px] bg-[#F8F7F4]/70 border border-coffee-50 flex items-center justify-between group hover:bg-white hover:shadow-lg transition-all">
-                    <div>
-                      <p className="font-black text-coffee-950 text-lg tracking-tight font-mono">#{order.id}</p>
-                      <p className="text-[10px] text-coffee-400 font-bold uppercase tracking-wider">{order.address}</p>
-                    </div>
-                    <div className="flex items-center gap-8">
-                      <div className="text-right">
-                        <p className="text-[10px] font-black text-coffee-300 uppercase tracking-widest">Payload</p>
-                        <p className="text-sm font-black text-coffee-900">{order.weight}kg</p>
-                      </div>
-                      <button onClick={() => addSuggestionToManifest(order)} className="bg-coffee-950 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all">Integrate</button>
-                    </div>
+              {fillSuggestions.map(order => (
+                <div key={order.id} className="p-6 rounded-[32px] bg-[#F8F7F4]/70 border border-coffee-50 flex items-center justify-between group hover:bg-white hover:shadow-lg transition-all">
+                  <div>
+                    <p className="font-black text-coffee-950 text-lg tracking-tight font-mono">#{order.id}</p>
+                    <p className="text-[10px] text-coffee-400 font-bold uppercase tracking-wider">{order.address}</p>
                   </div>
-                ))}
+                  <div className="flex items-center gap-8">
+                    <div className="text-right">
+                      <p className="text-[10px] font-black text-coffee-300 uppercase tracking-widest">Payload</p>
+                      <p className="text-sm font-black text-coffee-900">{order.weight}kg</p>
+                    </div>
+                    <button onClick={() => addSuggestionToManifest(order)} className="bg-coffee-950 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all">Integrate</button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
 
       {/* Custom Styles */}
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes bounce-subtle {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-4px); }

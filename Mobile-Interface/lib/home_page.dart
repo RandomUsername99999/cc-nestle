@@ -24,7 +24,6 @@ class _HomePageState extends State<HomePage> {
   bool _isLoadingTask = false;
   String? _accessToken;
   
-  // Use 127.0.0.1 for desktop/web testing. Change back to 10.0.2.2 for Android Emulator.
   final String _baseApiUrl = "https://UnderpaidWorker.pythonanywhere.com/api/";
 
   Map<String, String> get _authHeaders => {
@@ -56,6 +55,8 @@ class _HomePageState extends State<HomePage> {
       if (response.statusCode == 200) {
         final Map<String, dynamic> shipment = jsonDecode(response.body);
         setState(() => _activeTask = shipment);
+      } else {
+        setState(() => _activeTask = null);
       }
     } catch (e) {
       debugPrint("Failed to load tasks: $e");
@@ -66,71 +67,52 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _checkPermissions() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      debugPrint('Location services are disabled.');
-      return;
-    }
+    if (!serviceEnabled) return;
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        debugPrint('Location permissions are denied');
-        return;
-      }
     }
   }
 
   void _startTracking() {
-    setState(() {
-      _isTracking = true;
-    });
+    setState(() => _isTracking = true);
 
-    _timer = Timer.periodic(const Duration(seconds: 5), (timer) async {
-      Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      
-      setState(() {
-        _currentPosition = position;
-      });
-
-      _sendLocationToBackend(position);
+    _timer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      try {
+        Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+        setState(() => _currentPosition = position);
+        _sendLocationToBackend(position);
+      } catch (e) {
+        debugPrint("Location error: $e");
+      }
     });
   }
 
   void _stopTracking() {
-    setState(() {
-      _isTracking = false;
-    });
+    setState(() => _isTracking = false);
     _timer?.cancel();
   }
 
   Future<void> _sendLocationToBackend(Position position) async {
     try {
-      final response = await http.post(
+      await http.post(
         Uri.parse("${_baseApiUrl}tracking/location/"),
         headers: _authHeaders,
         body: jsonEncode(<String, dynamic>{
           'driver_id': widget.userId.toString(),
-          'vehicle_id': _activeTask?['assigned_vehicle']?.toString() ?? "unassigned",
           'latitude': position.latitude,
           'longitude': position.longitude,
           'timestamp': DateTime.now().toIso8601String(),
           'status': 'active',
         }),
       );
-
-      if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 202) {
-        debugPrint('Location synced: ${position.latitude}, ${position.longitude}');
-      }
-    } catch (e) {
-      debugPrint('Error networking: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('userId');
+    await prefs.remove('access_token');
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
@@ -149,181 +131,306 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFCFBF9), // Soft Cream background
-      appBar: AppBar(
-        title: const Text('Fleet Logistics OS', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5, color: Colors.white)),
-        backgroundColor: const Color(0xFF3E2723), // Dark Coffee
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                context, 
-                MaterialPageRoute(builder: (context) => DeliverySearchScreen(userId: widget.userId, baseUrl: _baseApiUrl))
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _fetchActiveTask,
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: _logout,
-          )
-        ],
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      backgroundColor: const Color(0xFFFCFBF9), // Cream canvas
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 1. Transmission Status Banner (Amber Warning)
+            if (!_isTracking)
+              GestureDetector(
+                onTap: _startTracking,
+                child: Container(
+                  width: double.infinity,
+                  color: const Color(0xFFFFB300), // Amber
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.black, size: 20),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "TRANSMISSION PAUSED: LOGS DEACTIVATED",
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.black, letterSpacing: 0.5),
+                        ),
+                      ),
+                      Text("RESUME", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.black, decoration: TextDecoration.underline)),
+                    ],
+                  ),
+                ),
+              ),
+
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 2. Driver Profile Header (Minimalist)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "OPERATIONAL STATUS",
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFFBCAAA4), letterSpacing: 1.5),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: _isTracking ? Colors.green : Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _isTracking ? "ONLINE / ACTIVE" : "OFFLINE / STANDBY",
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF3E2723)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          onPressed: _logout,
+                          icon: const Icon(Icons.logout, color: Color(0xFF3E2723)),
+                        )
+                      ],
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    // 3. Main Action Context (What's next?)
+                    Text(
+                      "ACTIVE MISSION",
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF3E2723).withOpacity(0.3), letterSpacing: 2),
+                    ),
+                    const SizedBox(height: 16),
+
+                    if (_isLoadingTask)
+                      const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: Color(0xFF3E2723))))
+                    else if (_activeTask != null)
+                      _buildMissionCard()
+                    else
+                      _buildIdleState(),
+
+                    const SizedBox(height: 32),
+                    
+                    // Fleet Info Overlay (Small & Integrated)
+                    if (_activeTask?['vehicle'] is Map)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFEFEBE9)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.local_shipping, color: Color(0xFF8D6E63), size: 20),
+                            const SizedBox(width: 12),
+                            Text(
+                              "LOGISTICS UNIT: ${_activeTask!['vehicle']['plate_number']}",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 0.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // 4. Primary Sticky Action Button (Global Context)
+            _buildStickyActionButton(),
+          ],
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+    );
+  }
+
+  Widget _buildMissionCard() {
+    final status = _activeTask!['status'] ?? 'planned';
+    final isOutbound = _activeTask!['assignment_type'] != 'inbound';
+    final manifestId = isOutbound ? "MF-${_activeTask!['shipment_id']}" : "CL-${_activeTask!['id'].toString().substring(0,6)}";
+
+    return GestureDetector(
+      onTap: () {
+        if (!isOutbound) {
+            Navigator.pushNamed(context, '/inbound/assignment', arguments: _activeTask);
+        } else {
+            Navigator.push(context, MaterialPageRoute(builder: (c) => ShipmentAssignmentView(userId: widget.userId, baseUrl: _baseApiUrl)));
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFF3E2723), // Dark Brown
+          borderRadius: BorderRadius.circular(40),
+          boxShadow: [
+            BoxShadow(color: const Color(0xFF3E2723).withOpacity(0.2), blurRadius: 30, offset: const Offset(0, 15)),
+          ],
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Status Card
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(32),
-                border: Border.all(color: const Color(0xFFEFEBE9)),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10)),
-                ],
-              ),
-              child: Column(
-                children: [
-                   Icon(
-                    _isTracking ? Icons.sensors : Icons.sensors_off,
-                    size: 48,
-                    color: _isTracking ? const Color(0xFF4CAF50) : const Color(0xFFBDBDBD),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  manifestId,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -1),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                  child: Text(
+                    status.toUpperCase(),
+                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _isTracking ? "TRANSMISSION ACTIVE" : "TRANSMISSION PAUSED",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2,
-                      color: _isTracking ? const Color(0xFF4CAF50) : const Color(0xFF795548),
-                    ),
-                  ),
-                  if (_currentPosition != null && _isTracking) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      "LAT: ${_currentPosition!.latitude.toStringAsFixed(4)} | LNG: ${_currentPosition!.longitude.toStringAsFixed(4)}",
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF8D6E63)),
-                    ),
-                  ],
-                ],
-              ),
+                ),
+              ],
             ),
-
             const SizedBox(height: 24),
-
-            // Active Task Section
-            const Text(
-              "ACTIVE ASSIGNMENT",
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFFBCAAA4), letterSpacing: 2),
+            Text(
+              "NEXT STOP",
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.4), letterSpacing: 2),
             ),
-            const SizedBox(height: 12),
-            
-            if (_isLoadingTask)
-              const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: Color(0xFF795548)))),
-            
-            if (!_isLoadingTask && _activeTask != null)
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ShipmentAssignmentView(
-                        userId: widget.userId,
-                        baseUrl: _baseApiUrl,
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF3E2723), Color(0xFF5D4037)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFF3E2723).withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8)),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("ACTIVE ASSIGNMENT", style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
-                          const SizedBox(height: 8),
-                          Text("#MF-${_activeTask!['shipment_id']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
-                        ],
-                      ),
-                      const Icon(Icons.chevron_right, color: Colors.white54, size: 30),
-                    ],
-                  ),
-                ),
-              )
-            else if (!_isLoadingTask)
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFEBE9).withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(32),
-                  border: Border.all(color: const Color(0xFFEFEBE9), style: BorderStyle.solid),
-                ),
-                child: const Column(
-                  children: [
-                    Icon(Icons.assignment_turned_in, color: Color(0xFFD7CCC8), size: 40),
-                    SizedBox(height: 12),
-                    Text("NO ACTIVE TASKS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFFBCAAA4))),
-                  ],
-                ),
-              ),
-
+            const SizedBox(height: 8),
+            Text(
+              isOutbound ? "Main Distribution Center" : (_activeTask!['supplier']?['name'] ?? "Warehouse"),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5),
+            ),
             const SizedBox(height: 32),
+            
+            // Minimal Step Tracker
+            Row(
+              children: [
+                _buildStepDot(true),
+                _buildStepLine(status != 'planned' && status != 'dispatched'),
+                _buildStepDot(status != 'planned' && status != 'dispatched'),
+                _buildStepLine(status == 'in_transit'),
+                _buildStepDot(status == 'in_transit'),
+                _buildStepLine(false),
+                _buildStepDot(false),
+              ],
+            )
+          ],
+        ),
+      ),
+    );
+  }
 
-            // Large Action Button
-            GestureDetector(
-              onTap: _isTracking ? _stopTracking : _startTracking,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                height: 80,
-                decoration: BoxDecoration(
-                  color: _isTracking ? const Color(0xFFD32F2F) : const Color(0xFF4CAF50),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (_isTracking ? Colors.red : Colors.green).withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(_isTracking ? Icons.stop_circle : Icons.play_circle_filled, color: Colors.white, size: 28),
-                    const SizedBox(width: 12),
-                    Text(
-                      _isTracking ? "END TRACKING" : "START TRACKING",
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1),
-                    ),
-                  ],
-                ),
-              ),
+  Widget _buildStepDot(bool active) {
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFBCAAA4) : Colors.white.withOpacity(0.1),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  Widget _buildStepLine(bool active) {
+    return Expanded(
+      child: Container(
+        height: 2,
+        color: active ? const Color(0xFFBCAAA4) : Colors.white.withOpacity(0.1),
+      ),
+    );
+  }
+
+  Widget _buildIdleState() {
+    return Container(
+      padding: const EdgeInsets.all(40),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: const Color(0xFFEFEBE9)),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.assignment_turned_in_outlined, size: 48, color: const Color(0xFFD7CCC8)),
+          const SizedBox(height: 16),
+          const Text(
+            "NO ASSIGNED MISSIONS",
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFFBCAAA4), letterSpacing: 1),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Stand by for terminal instructions.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFD7CCC8)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStickyActionButton() {
+    String label = "START TRACKING";
+    Color btnColor = const Color(0xFF3E2723);
+    IconData icon = Icons.play_arrow_rounded;
+    VoidCallback action = _startTracking;
+
+    if (_isTracking) {
+      if (_activeTask == null) {
+        label = "RELOAD MISSIONS";
+        icon = Icons.refresh_rounded;
+        action = _fetchActiveTask;
+      } else {
+        final status = _activeTask!['status'];
+        if (status == 'dispatched' || status == 'planned') {
+          label = "OPEN ASSIGNMENT";
+          icon = Icons.assignment_rounded;
+        } else if (status == 'accepted') {
+          label = "START NAVIGATION";
+          icon = Icons.navigation_rounded;
+        } else {
+          label = "VIEW MISSION DETAILS";
+          icon = Icons.explore_rounded;
+        }
+        action = () {
+             if (_activeTask!['assignment_type'] == 'inbound') {
+                Navigator.pushNamed(context, '/inbound/assignment', arguments: _activeTask);
+             } else {
+                Navigator.push(context, MaterialPageRoute(builder: (c) => ShipmentAssignmentView(userId: widget.userId, baseUrl: _baseApiUrl)));
+             }
+        };
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: const Color(0xFFEFEBE9))),
+      ),
+      child: ElevatedButton(
+        onPressed: action,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: btnColor,
+          minimumSize: const Size(double.infinity, 72),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          elevation: 0,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 28),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1),
             ),
           ],
         ),

@@ -15,3 +15,31 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Global Settings Feature Overrides */
+html.dark-theme-override {
+    filter: invert(0.92) hue-rotate(180deg) saturate(1.2) brightness(1.05);
+    background-color: #121212 !important;
+}
+
+/* Re-invert media and specific areas so they look normal */
+html.dark-theme-override img, 
+html.dark-theme-override video,
+html.dark-theme-override iframe,
+html.dark-theme-override .leaflet-container {
+    filter: invert(1) hue-rotate(180deg) saturate(0.85);
+}
+
+html.compact-mode * {
+    line-height: 1.25 !important;
+}
+
+html.compact-mode .p-6, 
+html.compact-mode .p-8, 
+html.compact-mode .py-8 {
+    padding: 0.75rem !important;
+}
+
+html.compact-mode .space-y-8 > * + * {
+    margin-top: 1rem !important;
+}

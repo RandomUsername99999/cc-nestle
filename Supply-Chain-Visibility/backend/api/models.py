@@ -96,8 +96,8 @@ class Customer(models.Model):
 
 class VehicleAssignment(models.Model):
     assignment_id = models.AutoField(primary_key=True)
-    driver = models.ForeignKey('drivers.Driver', on_delete=models.CASCADE, related_name='assignments', db_column='driver_id')
-    vehicle = models.ForeignKey('vehicles.Vehicle', on_delete=models.CASCADE, related_name='assignments', db_column='vehicle_id')
+    driver = models.ForeignKey('drivers.Driver', on_delete=models.SET_NULL, null=True, blank=True, related_name='assignments', db_column='driver_id')
+    vehicle = models.ForeignKey('vehicles.Vehicle', on_delete=models.SET_NULL, null=True, blank=True, related_name='assignments', db_column='vehicle_id')
     assignment_start_date = models.DateTimeField(auto_now_add=True)
     assignment_end_date = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, default='active')
@@ -162,8 +162,8 @@ class Order(models.Model):
 
 class Shipment(models.Model):
     shipment_id = models.AutoField(primary_key=True)
-    vehicle = models.ForeignKey('vehicles.Vehicle', on_delete=models.PROTECT, related_name='shipments')
-    driver = models.ForeignKey('drivers.Driver', on_delete=models.PROTECT, related_name='shipments')
+    vehicle = models.ForeignKey('vehicles.Vehicle', on_delete=models.SET_NULL, null=True, blank=True, related_name='shipments')
+    driver = models.ForeignKey('drivers.Driver', on_delete=models.SET_NULL, null=True, blank=True, related_name='shipments')
     
     total_weight = models.DecimalField(max_digits=10, decimal_places=2)
     total_volume = models.DecimalField(max_digits=10, decimal_places=2)

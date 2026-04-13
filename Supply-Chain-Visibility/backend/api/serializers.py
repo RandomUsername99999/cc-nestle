@@ -35,6 +35,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         return value
 
     def validate_contact_number(self, value):
+        import re
         if not re.match(r'^\d{10,}$', value):
             raise serializers.ValidationError("Telephone must be at least 10 digits.")
         return value
@@ -156,10 +157,12 @@ class VehicleSerializer(serializers.ModelSerializer):
     insurance_expiry = serializers.DateField(required=False, allow_null=True)
     registration_expiry = serializers.DateField(required=False, allow_null=True)
     is_refrigerated = serializers.BooleanField(required=False, default=False)
+    current_load_weight = serializers.FloatField(read_only=True)
+    current_load_volume = serializers.FloatField(read_only=True)
 
     class Meta:
         model = Vehicle
-        fields = ('id', 'plate_number', 'vehicle_type', 'make_model', 'manufacturer', 'year', 'capacity', 'volume', 'assignedDriver', 'driver_name', 'status', 'insurance_expiry', 'registration_expiry', 'is_refrigerated')
+        fields = ('id', 'plate_number', 'vehicle_type', 'make_model', 'manufacturer', 'year', 'capacity', 'volume', 'assignedDriver', 'driver_name', 'status', 'insurance_expiry', 'registration_expiry', 'is_refrigerated', 'current_load_weight', 'current_load_volume')
 
     def get_assignedDriver(self, obj):
         active_assignment = obj.assignments.filter(status='active').first()

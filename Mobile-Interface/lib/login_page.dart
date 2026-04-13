@@ -267,8 +267,9 @@ class _HoverContainerState extends State<HoverContainer> {
           boxShadow: [
             BoxShadow(
               color: _isHovered
-                  ? Colors.brown.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: 0.5),
+                  ? Colors.brown.withOpacity(0.5)
+                  : Colors.black.withOpacity(0.5),
+
               blurRadius: _isHovered ? 15 : 5,
               spreadRadius: _isHovered ? 5 : 1,
               offset: Offset(0, _isHovered ? 8 : 3),

@@ -29,7 +29,9 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
   Timer? _acceptanceTimer;
   int _secondsRemaining = 900; // 15 minutes timeout
   StreamSubscription<Position>? _locationSubscription;
-  final FirebaseDatabase _database = FirebaseDatabase.instance;
+  bool _isTracking = false;
+  FirebaseDatabase? _database;
+
   String? _accessToken;
 
   Map<String, String> get _authHeaders => {
@@ -119,28 +121,45 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
     }
 
     _locationSubscription?.cancel();
-    _locationSubscription = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 30, // 30 meters
-      ),
-    ).listen((Position position) {
-      _database.ref("tracking/$shipmentId/current").set({
-        "lat": position.latitude,
-        "lng": position.longitude,
-        "accuracy": position.accuracy,
-        "timestamp": DateTime.now().toIso8601String(),
-        "driver_id": widget.userId,
-        "active": true,
+    try {
+      _database ??= FirebaseDatabase.instance;
+      _locationSubscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 30,
+        ),
+      ).listen((Position position) {
+        try {
+          _database!.ref("tracking/$shipmentId/current").set({
+            "lat": position.latitude,
+            "lng": position.longitude,
+            "accuracy": position.accuracy,
+            "timestamp": DateTime.now().toIso8601String(),
+            "driver_id": widget.userId,
+            "active": true,
+          });
+        } catch (e) {
+          debugPrint("Firebase database update failed: \$e");
+        }
       });
-    });
+    } catch (e) {
+      debugPrint("Failed to start Firebase tracking: \$e");
+      _showError("Real-time tracking unavailable");
+    }
+
   }
 
   Future<void> _stopTracking(String shipmentId) async {
     await _locationSubscription?.cancel();
     _locationSubscription = null;
-    await _database.ref("tracking/$shipmentId/current").update({"active": false});
+    try {
+      _database ??= FirebaseDatabase.instance;
+      await _database!.ref("tracking/$shipmentId/current").update({"active": false});
+    } catch (e) {
+      debugPrint("Failed to stop tracking: \$e");
+    }
   }
+
 
   Future<void> _acceptAssignment() async {
     if (_data == null) return;
@@ -229,8 +248,13 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
     ));
   }
 
-  _launchNavigation(String address) async {
+  _launchNavigation(String? address) async {
+    if (address == null || address.isEmpty) {
+      _showError("Invalid navigation address");
+      return;
+    }
     final url = "google.navigation:q=${Uri.encodeComponent(address)}&mode=d";
+
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
     } else {
@@ -239,30 +263,50 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
     }
   }
 
+  String? _selectedStopAddress;
+  String? _selectedStopOrderId;
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF111111),
-        body: Center(child: CircularProgressIndicator(color: Colors.amber)),
+        backgroundColor: Color(0xFFFCFBF9),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF3E2723))),
       );
     }
 
-    if (_error != null || _data == null) {
-      return _buildErrorState();
+    if (_error != null) { return _buildErrorState(); }
+    if (_data == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFFCFBF9),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF3E2723))),
+      );
     }
 
-    final status = _data!['status'];
-    
+    final status = _data!['status'] ?? 'unknown';
     return Scaffold(
-      backgroundColor: const Color(0xFF111111),
+      backgroundColor: const Color(0xFFFCFBF9),
       appBar: AppBar(
-        title: Text("ASSIGNMENT MF-${_data!['shipment_id']}", style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 14)),
-        backgroundColor: Colors.transparent,
+        title: Column(
+          children: [
+            Text("ASSIGNMENT MF-${_data!['shipment_id']}", style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 10, color: Colors.white70)),
+            if (_data!['vehicle'] is Map)
+              Text(
+                "${_data!['vehicle']['plate_number']}",
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5),
+              ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF3E2723),
         elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchAssignment)
+          IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _fetchAssignment)
         ],
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+        ),
       ),
       body: _buildBody(status),
     );
@@ -270,154 +314,220 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
 
   Widget _buildBody(String status) {
     switch (status) {
-      case 'dispatched': return _buildAcceptanceScreen();
-      case 'accepted': return _buildPickupScreen();
-      case 'in_transit': return _buildActiveRouteScreen();
-      case 'completed': return _buildCompletionScreen();
-      default: return _buildActiveRouteScreen();
+      case 'dispatched': return _buildAcceptanceStage();
+      case 'accepted': return _buildPickupStage();
+      case 'in_transit': return _buildTransitStage();
+      case 'completed': return _buildFinalizedStage();
+      default: return _buildTransitStage();
     }
   }
 
-  Widget _buildAcceptanceScreen() {
-    final minutes = _secondsRemaining ~/ 60;
-    final seconds = (_secondsRemaining % 60).toString().padLeft(2, '0');
-    
+  // --- STAGE 1: MISSION ACCEPTANCE ---
+  Widget _buildAcceptanceStage() {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(32),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.assignment_ind, size: 80, color: Colors.amber),
-          const SizedBox(height: 24),
-          const Text("SHIPMENT PENDING ACCEPTANCE", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text("${_data!['warehouse']['name']} ➔ ${_data!['route_summary']['total_stops']} STOPS", style: const TextStyle(color: Colors.white38)),
-          const SizedBox(height: 48),
+          const Spacer(),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-            child: Text("AUTO-ESCALATION IN: $minutes:$seconds", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(height: 48),
-          ElevatedButton(
-            onPressed: _acceptAssignment,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.amber, minimumSize: const Size(double.infinity, 60),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(40),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 30)],
             ),
-            child: const Text("ACCEPT AND START", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: const Icon(Icons.assignment_late_rounded, size: 80, color: Color(0xFF3E2723)),
+          ),
+          const SizedBox(height: 40),
+          const Text("NEW MISSION ASSIGNED", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: -0.5)),
+          const SizedBox(height: 12),
+          Text(
+            "${_data!['warehouse']['name']} → ${_data!['route_summary']['total_stops']} Stops",
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4)),
+          ),
+          const Spacer(),
+          _buildPrimaryStickyButton(
+            label: "ACCEPT MISSION",
+            icon: Icons.check_circle_rounded,
+            onPressed: _acceptAssignment,
+            subtext: "Auto-escalation in ${(_secondsRemaining ~/ 60)}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPickupScreen() {
+  // --- STAGE 2: PICKUP FLOW ---
+  Widget _buildPickupStage() {
     final wh = _data!['warehouse'];
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("STEP 1: ARRIVE AT WAREHOUSE", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          _buildInfoCard(wh['name'], wh['address'], Icons.warehouse),
+          _buildStepHeader(1, "ARRIVE AT PICKUP"),
           const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(child: ElevatedButton.icon(
-                onPressed: () => _launchNavigation(wh['address']),
-                icon: const Icon(Icons.navigation),
-                label: const Text("NAVIGATE"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.white10, foregroundColor: Colors.white),
-              )),
-              const SizedBox(width: 16),
-              Expanded(child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (c) => QRScannerView(
-                    title: "Scan Warehouse QR",
-                    onScan: (code) => _confirmPickup(code),
-                  )));
-                },
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text("SCAN PICKUP"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
-              )),
-            ],
-          )
+          _buildLocationCard(wh['name'], wh['address'], Icons.warehouse_rounded),
+          const Spacer(),
+          _buildPrimaryStickyButton(
+            label: "NAVIGATE TO WAREHOUSE",
+            icon: Icons.navigation_rounded,
+            onPressed: () => _launchNavigation(wh['address']),
+          ),
+          const SizedBox(height: 16),
+          _buildSecondaryButton(
+            label: "SCAN PICKUP QR",
+            icon: Icons.qr_code_scanner_rounded,
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => QRScannerView(title: "Scan Pickup", onScan: _confirmPickup))),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildActiveRouteScreen() {
+  // --- STAGE 3: TRANSIT / DELIVERY FLOW ---
+  Widget _buildTransitStage() {
     final stops = _data!['stops'] as List;
-    final summary = _data!['route_summary'];
-
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    // Find the first undelivered stop
+    final nextStop = stops.firstWhere((s) => true); // In a real app, track undelivered indices
+    
+    return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _statTile("${summary['total_stops']}", "STOPS"),
-            _statTile("${summary['total_distance_km']}", "KM"),
-            _statTile("${summary['estimated_duration_minutes']}", "MIN"),
-          ],
+        // Mini Map/Stats Area
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
+          color: const Color(0xFF3E2723).withOpacity(0.03),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildMiniStat("${_data!['route_summary']['total_stops']}", "STOPS"),
+              _buildMiniStat("${_data!['route_summary']['total_distance_km']}", "KM"),
+              _buildMiniStat("${_data!['route_summary']['estimated_duration_minutes']}", "ETA"),
+            ],
+          ),
         ),
-        const SizedBox(height: 32),
-        const Text("DELIVERY SEQUENCE", style: TextStyle(color: Colors.white30, fontWeight: FontWeight.bold, fontSize: 12)),
-        const SizedBox(height: 16),
-        ...stops.map((stop) => _buildStopCard(stop)),
+        
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(32),
+            itemCount: stops.length,
+            itemBuilder: (context, index) {
+              final stop = stops[index];
+              return _buildFieldStopCard(stop);
+            },
+          ),
+        ),
+
+        // Contextual Floating Action
+        _buildPrimaryStickyButton(
+          label: "SCAN DELIVERY",
+          icon: Icons.qr_code_scanner_rounded,
+          onPressed: () {
+              // Usually, driver should select a stop first or scan any item
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Expand a stop and click DELIVER to authenticate."), behavior: SnackBarBehavior.floating));
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildStopCard(Map<String, dynamic> stop) {
+  Widget _buildFieldStopCard(Map<String, dynamic> stop) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: const Color(0xFFEFEBE9)),
+      ),
       child: ExpansionTile(
-        iconColor: Colors.amber,
-        collapsedIconColor: Colors.white24,
-        title: Text(stop['address'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text("ETA: ${stop['estimated_arrival'].split('T')[1].substring(0, 5)}", style: const TextStyle(color: Colors.white38, fontSize: 12)),
-        leading: CircleAvatar(backgroundColor: Colors.amber.withValues(alpha: 0.1), child: Text("${stop['sequence']}", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(30))),
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xFF3E2723).withOpacity(0.05),
+          child: Text("${stop['sequence']}", style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
+        ),
+        title: Text(stop['address'], style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF3E2723))),
+        subtitle: Text("PARCELS: ${stop['parcels']} • KG: ${stop['weight_kg']}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4))),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: Row(
+                children: [
+                  Expanded(child: _buildSecondaryButton(
+                    label: "NAVIGATE",
+                    icon: Icons.navigation_rounded,
+                    onPressed: () => _launchNavigation(stop['address']),
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildActionBtn(
+                    label: "DELIVER",
+                    color: const Color(0xFF3E2723),
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => QRScannerView(title: "Deliver Stop", onScan: (code) => _completeDelivery(stop['order_id'], code)))),
+                  )),
+                ],
+              ),
+            )
+        ],
+      ),
+    );
+  }
+
+  // --- STAGE 4: COMPLETION ---
+  Widget _buildFinalizedStage() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          children: [
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.all(40),
+              decoration: const BoxDecoration(color: Color(0xFF4CAF50), shape: BoxShape.circle),
+              child: const Icon(Icons.check_rounded, size: 60, color: Colors.white),
+            ),
+            const SizedBox(height: 32),
+            const Text("MISSION SUCCESS", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
+            const SizedBox(height: 12),
+            const Text("All stops verified. Report to terminal.", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4))),
+            const Spacer(),
+            _buildPrimaryStickyButton(label: "CLOSE MISSION", icon: Icons.home_rounded, onPressed: () => Navigator.pop(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- UI COMPONENTS ---
+  Widget _buildStepHeader(int step, String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("STEP $step / 4", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFFBCAAA4), letterSpacing: 2)),
+        const SizedBox(height: 4),
+        Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: -0.5)),
+      ],
+    );
+  }
+
+  Widget _buildLocationCard(String title, String address, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: const Color(0xFFEFEBE9)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 32, color: const Color(0xFF8D6E63)),
+          const SizedBox(width: 24),
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Divider(color: Colors.white10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text("Parcels: ${stop['parcels']}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                    Text("Weight: ${stop['weight_kg']} KG", style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: TextButton.icon(
-                      onPressed: () => _launchNavigation(stop['address']),
-                      icon: const Icon(Icons.directions, size: 18),
-                      label: const Text("NAVIGATE"),
-                      style: TextButton.styleFrom(foregroundColor: Colors.blueAccent),
-                    )),
-                    Expanded(child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (c) => QRScannerView(
-                          title: "Confirm Delivery",
-                          onScan: (code) => _completeDelivery(stop['order_id'], code),
-                        )));
-                      },
-                      icon: const Icon(Icons.check_circle_outline, size: 18),
-                      label: const Text("DELIVER"),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
-                    )),
-                  ],
-                )
+                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
+                const SizedBox(height: 8),
+                Text(address, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4))),
               ],
             ),
           )
@@ -426,74 +536,88 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
     );
   }
 
-  Widget _buildCompletionScreen() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.task_alt, size: 100, color: Colors.greenAccent),
-            const SizedBox(height: 24),
-            const Text("ROUTE COMPLETED", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text("Tracking successfully stopped. Manifest finalized.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white38)),
-            const SizedBox(height: 48),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.white10, minimumSize: const Size(double.infinity, 60)),
-              child: const Text("CLOSE SUMMARY", style: TextStyle(color: Colors.white)),
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorState() {
-    return Scaffold(
-      backgroundColor: const Color(0xFF111111),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.cloud_off, size: 60, color: Colors.white10),
-              const SizedBox(height: 24),
-              Text(_error ?? "Awaiting Assignments...", textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38)),
-              const SizedBox(height: 40),
-              ElevatedButton(onPressed: _fetchAssignment, child: const Text("RETRY SYNC")),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(String title, String subtitle, IconData icon) {
+  Widget _buildPrimaryStickyButton({required String label, required IconData icon, required VoidCallback onPressed, String? subtext}) {
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(16)),
-      child: Row(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.amber, size: 30),
-          const SizedBox(width: 20),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 12)),
-          ]))
+          if (subtext != null)
+             Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(subtext, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF8D6E63), letterSpacing: 1))),
+          ElevatedButton(
+            onPressed: onPressed,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3E2723),
+              minimumSize: const Size(double.infinity, 80),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              elevation: 10,
+              shadowColor: const Color(0xFF3E2723).withOpacity(0.3),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: Colors.white, size: 28),
+                const SizedBox(width: 16),
+                Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1)),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _statTile(String value, String label) {
+  Widget _buildSecondaryButton({required String label, required IconData icon, required VoidCallback onPressed}) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 70),
+        side: const BorderSide(color: Color(0xFF3E2723), width: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: const Color(0xFF3E2723), size: 24),
+          const SizedBox(width: 12),
+          Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionBtn({required String label, required Color color, required VoidCallback onPressed}) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(backgroundColor: color, minimumSize: const Size(double.infinity, 60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white)),
+    );
+  }
+
+  Widget _buildMiniStat(String value, String label) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic)),
-        Text(label, style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
+        Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFFBCAAA4), letterSpacing: 1)),
       ],
     );
+  }
+
+  Widget _buildErrorState() {
+     return Scaffold(
+      backgroundColor: const Color(0xFFFCFBF9),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 80, color: Color(0xFFD7CCC8)),
+            const SizedBox(height: 24),
+            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4))),
+            const SizedBox(height: 40),
+            _buildActionBtn(label: "RELOAD SYNC", color: const Color(0xFF3E2723), onPressed: _fetchAssignment),
+          ],
+        ),
+      ),
+     );
   }
 }

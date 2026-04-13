@@ -6,6 +6,7 @@ import {
 } from "react-icons/bi";
 import { GiTruck } from "react-icons/gi";
 import { toast } from "react-hot-toast";
+import { QRCodeSVG } from 'qrcode.react';
 
 const ShipmentManifest = () => {
     const [shipments, setShipments] = useState([]);
@@ -16,6 +17,17 @@ const ShipmentManifest = () => {
     useEffect(() => {
         fetchShipments();
     }, []);
+
+    const deleteManifest = async (id) => {
+        if(!window.confirm("Permanent deletion of this manifest audit?")) return;
+        try {
+            await api.delete(`shipments/${id}/`);
+            toast.success("Manifest purged.");
+            fetchShipments();
+        } catch (error) {
+            toast.error("Failed to delete manifest.");
+        }
+    };
 
     const fetchShipments = async () => {
         setLoading(true);
@@ -95,9 +107,9 @@ const ShipmentManifest = () => {
                                 className={`group bg-white p-6 rounded-[24px] shadow-sm border transition-all cursor-pointer hover:shadow-md ${selectedShipment?.shipment_id === shipment.shipment_id ? 'border-coffee-900 ring-4 ring-coffee-900/5' : 'border-coffee-50 hover:border-coffee-100'}`}
                             >
                                 <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-10 h-10 bg-coffee-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-coffee-900/20">
-                                            <BiPackage className="text-xl" />
+                                    <div className="flex items-center space-x-4">
+                                        <div className="bg-white p-1.5 rounded-lg border border-coffee-100 shadow-sm shrink-0">
+                                            <QRCodeSVG value={`${window.location.origin}/admin/shipments?id=${shipment.shipment_id}`} size={36} fgColor="#3E2723" />
                                         </div>
                                         <div>
                                             <h3 className="text-sm font-black text-coffee-950">Manifest #MF-{shipment.shipment_id}</h3>
@@ -172,9 +184,17 @@ const ShipmentManifest = () => {
                                         {selectedShipment.requires_refrigeration ? 'ACTIVE' : 'INACTIVE'}
                                     </span>
                                 </div>
-                                <button className="w-full bg-[#3E2723] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-coffee-900/20 active:scale-95 transition-all">
-                                    Print Secure Manifest
-                                </button>
+                                <div className="flex gap-4">
+                                    <button 
+                                        onClick={() => deleteManifest(selectedShipment.shipment_id)}
+                                        className="flex-1 bg-rose-50 text-rose-600 py-3 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+                                    >
+                                        Purge Audit
+                                    </button>
+                                    <button className="flex-1 bg-[#3E2723] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-coffee-900/20 active:scale-95 transition-all">
+                                        Print Manifest
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ) : (

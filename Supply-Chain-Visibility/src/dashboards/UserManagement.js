@@ -533,7 +533,25 @@ export default function UserManagement() {
                                             <BiPencil />
                                         </button>
                                         <button 
-                                            onClick={() => setDeleteTarget(u)}
+                                            onClick={async () => {
+                                                if (u.role === 'driver') {
+                                                    try {
+                                                        const res = await api.get('vehicles/');
+                                                        const userVehicles = res.data.filter(v => v.driver_name === u.username || v.assignedDriver === u.id);
+                                                        if (userVehicles.some(v => (v.current_load_weight || 0) > 0)) {
+                                                            toast.error("Cannot delete: Driver is assigned to an active shipment.");
+                                                            return;
+                                                        }
+                                                        if (userVehicles.length > 0) {
+                                                            setDeleteTarget({...u, boundVehicleId: userVehicles[0].id});
+                                                            return;
+                                                        }
+                                                    } catch (e) {
+                                                        // Fallback
+                                                    }
+                                                }
+                                                setDeleteTarget(u);
+                                            }}
                                             className="w-10 h-10 flex items-center justify-center rounded-xl border border-coffee-100 text-coffee-300 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100 transition-all shadow-sm"
                                         >
                                             <BiTrash />
@@ -651,12 +669,17 @@ export default function UserManagement() {
             <ConfirmationModal 
                 isOpen={!!deleteTarget}
                 title="Revoke Permission"
-                message={deleteTarget ? `Are you sure you want to permanently revoke access for ${deleteTarget.username}? This process is irreversible.` : ''}
-                confirmText="Revoke Access"
+                message={deleteTarget ? (deleteTarget.boundVehicleId ? `This item is currently bound. Do you want to revoke the binding and delete it?` : `Are you sure you want to permanently revoke access for ${deleteTarget.username}? This process is irreversible.`) : ''}
+                confirmText={deleteTarget?.boundVehicleId ? "Revoke Binding & Delete" : "Revoke Access"}
                 cancelText="Retain Access"
                 onConfirm={async () => {
                     if (deleteTarget) {
                         try {
+                            if (deleteTarget.boundVehicleId) {
+                                try {
+                                    await api.patch(`vehicles/${deleteTarget.boundVehicleId}/`, { assignedDriver: null });
+                                } catch (e) {}
+                            }
                             await api.delete(`users/${deleteTarget.id}/`);
                             toast.success("Access Revoked");
                             fetchUsers();

@@ -17,6 +17,9 @@ import AuditLog from './dashboards/AuditLog';
 import OrderManagement from './dashboards/OrderManagement';
 import ShipmentManifest from './dashboards/ShipmentManifest';
 import InboundProcurement from './dashboards/InboundProcurement';
+import Profile from './dashboards/Profile';
+import Settings from './dashboards/Settings';
+import DeliveryManagement from './dashboards/DeliveryManagement';
 
 import api from './api';
 import './App.css';
@@ -38,6 +41,14 @@ function App() {
 
   const getRoleFromLogin = (data) => {
     setRole(data);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_id');
+    setUser(null);
+    setRole(null);
   };
 
   useEffect(() => {
@@ -63,6 +74,43 @@ function App() {
     checkAuth();
   }, []);
 
+  useEffect(() => {
+    const applySettings = () => {
+      try {
+        const raw = localStorage.getItem('logistics_settings');
+        if (raw) {
+           const settings = JSON.parse(raw);
+           if (settings.appearance) {
+              // Apply Theme
+              if (settings.appearance.theme === 'dark') {
+                  document.documentElement.classList.add('dark-theme-override');
+              } else {
+                  document.documentElement.classList.remove('dark-theme-override');
+              }
+              
+              // Apply Compact Mode
+              if (settings.appearance.compactMode) {
+                  document.documentElement.classList.add('compact-mode');
+              } else {
+                  document.documentElement.classList.remove('compact-mode');
+              }
+              
+              // Apply Language
+              if (settings.appearance.language) {
+                  document.documentElement.lang = settings.appearance.language;
+              }
+           }
+        }
+      } catch (e) { /* ignore */ }
+    };
+    
+    // Apply immediately
+    applySettings();
+    // Listen for cross-component updates
+    window.addEventListener('settings_updated', applySettings);
+    return () => window.removeEventListener('settings_updated', applySettings);
+  }, []);
+
   if (loading) return (
     <div className="flex h-screen w-screen items-center justify-center bg-[#FDFBF7]">
       <BiLoaderAlt className="animate-spin text-[#5D4037] text-5xl" />
@@ -73,7 +121,9 @@ function App() {
     <>
       <Toaster position="top-right" />
       <Routes>
+        {/* Redirect already-authenticated users away from login */}
         <Route path='/' element={
+          user ? <Navigate to='/admin/dashboard' replace /> : (
           <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center p-4 sm:p-8 font-sans relative overflow-hidden">
             {/* Subtle radial gradient layer for depth */}
             <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_right,rgba(141,110,99,0.05),transparent_50%)] pointer-events-none"></div>
@@ -101,12 +151,13 @@ function App() {
 
               {/* Right Side: Login Form */}
               <div className="w-full md:w-7/12 p-8 sm:p-14 flex flex-col justify-center bg-white relative">
-                 <LoginCard sendDataToParent={getRoleFromLogin} />
+                 <LoginCard sendDataToParent={getRoleFromLogin} setUser={setUser} />
               </div>
             </div>
           </div>
+          )
         } />
-        <Route element={<AdminTemplate userRole={role} userName={user?.username} />}>
+        <Route element={<AdminTemplate userRole={role} userName={user?.username} onLogout={handleLogout} />}>
           <Route path='/admin/dashboard' element={user ? roleRoutes.dashboard[role] : <Navigate to='/' />} />
           <Route path='/admin/livetracker' element={<LiveTracker />} />
           <Route path='/admin/dispatch' element={role === 'dispatcher' ? <DispatchPlanning /> : <Navigate to='/admin/dashboard' />} />
@@ -116,9 +167,11 @@ function App() {
           <Route path='/admin/users' element={role === 'admin' ? <UserManagement /> : <Navigate to='/admin/dashboard' />} />
           <Route path='/admin/vehicles' element={['admin', 'manager', 'dispatcher'].includes(role) ? <VehicleManagement /> : <Navigate to='/admin/dashboard' />} />
           <Route path='/admin/audit' element={role === 'admin' ? <AuditLog /> : <Navigate to='/admin/dashboard' />} />
-          <Route path='/admin/inbound' element={['admin', 'manager', 'dispatcher'].includes(role) ? <InboundProcurement /> : <Navigate to='/admin/dashboard' />} />
-          <Route path='/admin/search' element={role === 'manager' ? <div className="p-8"><h1 className="text-2xl font-bold">Advanced Search</h1><p>Manager console for data mining.</p></div> : <Navigate to='/admin/dashboard' />} />
-          <Route path='/admin/profile' element={<p>User Profile</p>} />
+          <Route path='/admin/inbound' element={['admin', 'manager'].includes(role) ? <InboundProcurement /> : <Navigate to='/admin/dashboard' />} />
+          <Route path='/admin/search' element={['admin', 'manager'].includes(role) ? <div className="p-8"><h1 className="text-2xl font-bold">Advanced Search</h1><p>Manager console for data mining.</p></div> : <Navigate to='/admin/dashboard' />} />
+          <Route path='/admin/profile' element={<Profile />} />
+          <Route path='/admin/settings' element={<Settings />} />
+          <Route path='/admin/management' element={['admin', 'manager'].includes(role) ? <DeliveryManagement /> : <Navigate to='/admin/dashboard' />} />
         </Route>
 
       </Routes>
@@ -126,7 +179,7 @@ function App() {
   );
 }
 
-function LoginCard({ sendDataToParent }) {
+function LoginCard({ sendDataToParent, setUser }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -164,6 +217,9 @@ function LoginCard({ sendDataToParent }) {
       }
 
       sendDataToParent(userRole);
+      if (setUser) {
+          setUser(userRes.data);
+      }
       navigate('/admin/dashboard', { replace: true });
     } catch (err) {
       console.log("Login Error:", err.response);

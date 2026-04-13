@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "ccgroup-99075"
+  },
+  "targets": {
+    "ccgroup-99075": {
+      "hosting": {
+        "prod-app": [
+          "mobile-app-cc"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

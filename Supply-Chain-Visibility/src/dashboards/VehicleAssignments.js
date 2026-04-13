@@ -195,30 +195,31 @@ export default function VehicleAssignments() {
                     </div>
                 </div>
 
-                {/* Availability Matrix */}
+                {/* Unassigned Resources Binding Region */}
                 <div className="space-y-6">
-                    <div className="bg-coffee-950 rounded-[32px] p-8 text-white shadow-xl relative overflow-hidden ring-1 ring-white/10">
-                        <div className="absolute top-0 right-0 p-8 opacity-5 text-9xl"><GiPathDistance/></div>
-                        <h3 className="text-lg font-bold mb-6 flex items-center relative z-10"><BiBadgeCheck className="mr-3 text-coffee-400 text-2xl"/> Availability Matrix</h3>
-                        <div className="grid grid-cols-2 gap-6 relative z-10">
+                    <div className="bg-gradient-to-br from-indigo-900 to-indigo-800 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden ring-4 ring-indigo-500/30">
+                        <div className="absolute top-0 right-0 p-8 opacity-10 text-9xl"><BiTransferAlt/></div>
+                        <h3 className="text-2xl font-black mb-4 flex items-center relative z-10 text-indigo-100"><BiBadgeCheck className="mr-3 text-indigo-400 text-3xl"/> Unassigned Resources</h3>
+                        <p className="text-sm font-medium text-indigo-200 mb-8 relative z-10 border-b border-indigo-700/50 pb-4">Available units ready to be paired for deployment.</p>
+                        <div className="grid grid-cols-2 gap-8 relative z-10">
                             <div className="space-y-4">
-                                <p className="text-[10px] font-black text-coffee-400 uppercase tracking-widest">Idle Assets ({unassignedVehicles.length})</p>
-                                <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                                <p className="text-xs font-black text-indigo-300 uppercase tracking-widest bg-indigo-950/50 py-2 px-3 rounded-xl border border-indigo-500/30 inline-block shadow-sm">Unassigned Vehicles ({unassignedVehicles.length})</p>
+                                <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
                                     {unassignedVehicles.map(v => (
-                                        <div key={v.id} className="text-xs font-bold bg-white/10 border border-white/20 p-3 rounded-xl hover:bg-white/20 transition-colors flex justify-between shadow-inner">
-                                            <span className="font-mono tracking-wider text-white">{v.plate_number}</span>
-                                            <span className="text-coffee-300 font-bold opacity-80">{v.vehicle_type}</span>
+                                        <div key={v.id} className="text-sm font-bold bg-indigo-950/40 border border-indigo-500/20 p-4 rounded-xl hover:bg-indigo-800/80 hover:border-indigo-400/50 transition-all flex justify-between items-center shadow-lg transform hover:-translate-y-1">
+                                            <span className="font-mono tracking-wider text-white text-lg">{v.plate_number}</span>
+                                            <span className="text-indigo-200 font-bold opacity-90 px-2 py-1 bg-indigo-900 rounded-md text-[10px] uppercase">{v.vehicle_type}</span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                             <div className="space-y-4">
-                                <p className="text-[10px] font-black text-coffee-400 uppercase tracking-widest">Idle Personnel ({availableDrivers.length})</p>
-                                <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                                <p className="text-xs font-black text-emerald-300 uppercase tracking-widest bg-emerald-950/50 py-2 px-3 rounded-xl border border-emerald-500/30 inline-block shadow-sm">Unassigned Personnel ({availableDrivers.length})</p>
+                                <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
                                     {availableDrivers.map(d => (
-                                        <div key={d.id} className="text-xs font-bold bg-white/10 border border-white/20 p-3 rounded-xl hover:bg-white/20 transition-colors shadow-inner">
-                                            <p className="text-white">{d.username}</p>
-                                            <p className="text-[9px] text-coffee-300 font-bold opacity-70 mt-0.5">{d.email}</p>
+                                        <div key={d.id} className="text-sm font-bold bg-emerald-950/20 border border-emerald-500/20 p-4 rounded-xl hover:bg-emerald-900/60 hover:border-emerald-400/50 transition-all shadow-lg transform hover:-translate-y-1">
+                                            <p className="text-white text-lg flex items-center gap-2"><BiUser className="text-emerald-400"/> {d.username}</p>
+                                            <p className="text-xs text-emerald-200/80 font-bold mt-1 ml-7">{d.email}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -291,6 +292,11 @@ export default function VehicleAssignments() {
                 onConfirm={async () => {
                     if (revokeTarget) {
                         try {
+                            if ((revokeTarget.current_load_weight || 0) > 0) {
+                                toast.error(`Termination Blocked: unit ${revokeTarget.plate_number} has active order shipments assigned.`);
+                                setRevokeTarget(null);
+                                return;
+                            }
                             await api.patch(`vehicles/${revokeTarget.id}/`, { assignedDriver: null });
                             toast.success("Assignment Terminated");
                             fetchData();
