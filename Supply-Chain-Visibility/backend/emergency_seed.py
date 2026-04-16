@@ -22,8 +22,18 @@ def seed():
     
     # 2. Create superadmin
     print("Creating superadmin...")
+    user_mgr = CustomUser.objects
+    print(f"  Manager debug: {type(user_mgr)}")
+    
     if not CustomUser.objects.filter(username='superadmin').exists():
-        user = CustomUser.objects.create_user(
+        # Fallback if the custom manager is not correctly linked for some reason
+        if not hasattr(user_mgr, 'create_user'):
+             print("  WARNING: Custom manager missing create_user. Using CustomUserManager directly.")
+             from api.models import CustomUserManager
+             user_mgr = CustomUserManager()
+             user_mgr.model = CustomUser
+
+        user = user_mgr.create_user(
             username='superadmin',
             email='admin@logistics.com',
             password='admin123',
@@ -49,7 +59,7 @@ def seed():
     
     for u in test_users:
         if not CustomUser.objects.filter(username=u['username']).exists():
-            user = CustomUser.objects.create_user(
+            user = user_mgr.create_user(
                 username=u['username'],
                 email=u['email'],
                 password=u['password'],

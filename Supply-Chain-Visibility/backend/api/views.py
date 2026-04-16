@@ -5,40 +5,60 @@ from rest_framework.decorators import action
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from django.utils import timezone
-from .models import CustomUser, Vehicle, VehicleAssignment, Order
+from .models import (
+    CustomUser, VehicleAssignment, Order, AuditLog, 
+    Shipment, ShipmentOrder, OrderException, OrderStatusLog,
+    Role, Employee, GPSPersistence
+)
+from vehicles.models import Vehicle
 from .serializers import UserSerializer, VehicleSerializer, VehicleAssignmentSerializer
 from .utils.route_optimization import cluster_orders
-# Cache-buster update to force server bytecode refresh: 2026-04-16-16:40
+# Cache-buster update to force server bytecode refresh: 2026-04-16-16:50
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
-        identifier = request.data.get('username')
-        password = request.data.get('password')
+        # DRF request.data can be immutable (QueryDict) or mutable (dict).
+        # We ensure we work with a mutable copy to perform the email-to-username swap.
+        try:
+            data = request.data.copy()
+        except AttributeError:
+            data = dict(request.data)
+            
+        identifier = data.get('username')
+        password = data.get('password')
         
         # Check if login identifier matches email or username
         user = CustomUser.objects.filter(email__iexact=identifier).first() or \
                CustomUser.objects.filter(username=identifier).first()
             
         if user:
-            # If user found by email, swap the identifier to the username for the super().post call
-            request.data['username'] = user.username
+            # Swap for the actual username so authenticate() works regardless of input type
+            data['username'] = user.username
+        
+        # We manually initialize the serializer with our modified data
+        serializer = self.get_serializer(data=data)
         
         try:
-            response = super().post(request, *args, **kwargs)
-            if response.status_code == 200:
-                # Add extra data to response
-                response.data['user_id'] = user.id
-                response.data['role'] = user.role.role_name.lower() if user.role else 'driver'
-                
-                # Audit Log: Successful login
-                from .models import AuditLog
-                AuditLog.objects.create(
-                    user=user,
-                    action='LOGIN_SUCCESS',
-                    resource_type='Session',
-                    details=f"User '{user.username}' ({user.role.role_name}) logged in successfully."
-                )
+            serializer.is_valid(raise_exception=True)
+            response_data = serializer.validated_data
+            
+            # Map user ID and role for frontend convenience
+            target_user = user or CustomUser.objects.get(username=data['username'])
+            response_data['user_id'] = target_user.id
+            response_data['role'] = target_user.role.role_name.lower() if target_user.role else 'driver'
+            
+            # Audit Log: Successful login
+            from .models import AuditLog
+            AuditLog.objects.create(
+                user=target_user,
+                action='LOGIN_SUCCESS',
+                resource_type='Session',
+                details=f"User '{target_user.username}' logged in successfully."
+            )
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
         except AuthenticationFailed:
             # Audit Log: Failed login
             from .models import AuditLog
@@ -49,12 +69,12 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 details=f"Failed login attempt for identifier '{identifier}'."
             )
             if user:
-                return Response({"detail": "Incorrect password. Please try again."}, status=status.HTTP_401_UNAUTHORIZED)
-            return Response({"detail": "No account found with these credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response({"detail": "Incorrect password. Please verify your credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"detail": "No account associated with this username or email was found."}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
-            return Response({"detail": f"Server authentication error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return response
+            import traceback
+            print(traceback.format_exc())
+            return Response({"detail": f"Server Authentication Error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class IsAdminRole(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -387,7 +407,7 @@ def get_locations(request):
     locations = cache.get('active_locations', {})
     return Response(list(locations.values()))
 
-from .models import Order, AuditLog, Shipment, ShipmentOrder
+# Models imported at top level
 from .serializers import OrderSerializer, AuditLogSerializer, ShipmentSerializer
 from django.db import transaction
 
@@ -562,7 +582,7 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         try:
             with transaction.atomic():
                 from drivers.models import Driver
-                from .models import Vehicle, AuditLog
+                from .models import AuditLog
                 vehicle = Vehicle.objects.get(vehicle_id=vehicle_id)
                 driver = Driver.objects.get(employee__user__user_id=driver_id)
                 orders = Order.objects.filter(order_id__in=order_ids)

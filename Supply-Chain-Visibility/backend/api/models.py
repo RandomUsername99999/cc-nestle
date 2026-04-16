@@ -24,8 +24,9 @@ class CustomUserManager(BaseUserManager):
 
     def create_superuser(self, username, email, password=None, **extra_fields):
         extra_fields.setdefault('is_superuser', True)
-        # Create a default admin role if it doesn't exist
-        from api.models import Role
+        extra_fields.setdefault('is_staff', True)
+        
+        # Access Role directly from current module context
         role, _ = Role.objects.get_or_create(
             role_name='Admin',
             defaults={'role_description': 'System Administrator'}
@@ -39,6 +40,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.CharField(max_length=255, unique=True)
     role = models.ForeignKey(Role, models.DO_NOTHING, db_column='role_id')
     is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
     
     objects = CustomUserManager()
 
@@ -53,7 +55,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def id(self):
         return self.user_id
 
-from vehicles.models import Vehicle
+# Safety imports for methods/properties only
 # Lazy-load to prevent startup circularity
 def get_driver_profile_model():
     from drivers.models import Driver
