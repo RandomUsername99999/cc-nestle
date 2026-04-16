@@ -1,6 +1,7 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from .models import CustomUser, Vehicle, Order, AuditLog, VehicleAssignment
+from .models import CustomUser, Order, AuditLog, VehicleAssignment
+from vehicles.models import Vehicle
 
 @receiver(post_save, sender=CustomUser)
 @receiver(post_save, sender=Vehicle)

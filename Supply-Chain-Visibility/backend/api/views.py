@@ -349,6 +349,7 @@ def tracking_location(request):
     
     # Enrich with Driver Name and Active Shipment
     from .models import GPSPersistence, VehicleAssignment, Order
+    from vehicles.models import Vehicle
     from drivers.models import Driver as DriverProfile
     
     driver_name = "Unknown Driver"
