@@ -6,7 +6,8 @@ from decimal import Decimal
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "server.settings")
 django.setup()
 
-from api.models import CustomUser, Role, Vehicle, Employee, DriverProfile, Order, VehicleAssignment
+from api.models import CustomUser, Role, Vehicle, Employee, Order, VehicleAssignment
+from drivers.models import Driver as DriverProfile
 
 def seed_data():
     print("🚀 Starting Data Seeding...")

@@ -81,8 +81,10 @@ export default function DispatchPlanning() {
   useEffect(() => {
     if (selectedInboundVehicle) {
       const v = vehicles.find(v => v.id.toString() === selectedInboundVehicle.toString());
-      if (v && v.id) {
-        setSelectedInboundDriver(v.id);
+      if (v && v.assignedDriver) {
+        setSelectedInboundDriver(v.assignedDriver);
+      } else {
+        setSelectedInboundDriver('');
       }
     }
   }, [selectedInboundVehicle, vehicles]);
@@ -101,8 +103,8 @@ export default function DispatchPlanning() {
 
       setOrders(hasQueryParams ? orderRes.data.results : orderRes.data);
       setVehicles(vehicleRes.data.filter(v => 
-        (!v.status || v.status === 'idle' || v.status === 'available' || v.status === 'Ready' || v.status === 'Active') && 
-        (v.assignedDriver || v.driver_name)
+        v.assignedDriver || 
+        ['idle', 'available', 'ready', 'active', 'in_use'].includes((v.status || "").toLowerCase())
       ));
 
       const mapping = {};
@@ -387,10 +389,16 @@ export default function DispatchPlanning() {
                     </div>
                     <div>
                       <h4 className="font-black text-coffee-950 text-xl tracking-tighter uppercase">{v.plate_number}</h4>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex flex-col gap-1 mt-1">
                         <p className="text-[10px] font-bold text-coffee-400 uppercase tracking-wider">{v.make_model || 'Unknown Model'}</p>
+                        <div className="flex items-center gap-1.5">
+                            <BiUser className={v.assignedDriver ? "text-coffee-300 text-xs" : "text-rose-300 text-xs"} />
+                            <p className={`text-[11px] font-black uppercase tracking-tight ${v.assignedDriver ? 'text-coffee-700' : 'text-rose-500 italic'}`}>
+                                {v.assignedDriver ? v.driver_name : 'No Driver Assigned'}
+                            </p>
+                        </div>
                         {v.is_refrigerated && (
-                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 text-[8px] font-black uppercase ring-1 ring-blue-100">
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 text-[8px] font-black uppercase ring-1 ring-blue-100 w-max">
                               ❄️ Cold Chain Eq.
                             </span>
                         )}
@@ -494,10 +502,16 @@ export default function DispatchPlanning() {
 
             <div className="bg-[#FAF9F6] p-10 rounded-[40px] flex items-center justify-between border border-coffee-50 group hover:shadow-lg transition-all cursor-pointer">
               <div>
-                <p className="text-[9px] font-black text-coffee-300 uppercase tracking-widest mb-2">Assigned Vehicle</p>
+                <p className="text-[9px] font-black text-coffee-300 uppercase tracking-widest mb-1">Assigned Vehicle</p>
                 <h3 className="text-3xl font-black text-coffee-950 tracking-tighter">
                   {selectedVehicleData ? selectedVehicleData.plate_number : "Assign Asset"}
                 </h3>
+                {selectedVehicleData && (
+                   <p className={`text-[10px] font-black uppercase tracking-tighter mt-1 flex items-center gap-1.5 ${selectedVehicleData.assignedDriver ? 'text-coffee-500' : 'text-rose-500 animate-pulse'}`}>
+                      {selectedVehicleData.assignedDriver ? <BiUser className="text-lg" /> : <ShieldAlert className="text-lg" />}
+                      {selectedVehicleData.assignedDriver ? selectedVehicleData.driver_name : 'REQUIRES DRIVER BINDING'}
+                   </p>
+                )}
               </div>
               <HiOutlineTruck className={`text-4xl ${selectedVehicle ? 'text-coffee-950' : 'text-coffee-100'}`} />
             </div>
@@ -537,7 +551,6 @@ export default function DispatchPlanning() {
               {(weightPercent > 100 || volumePercent > 100) && (
                 <div className="bg-rose-50 border border-rose-100 p-6 rounded-[24px] flex items-start gap-4">
                   <BiErrorCircle className="text-2xl text-rose-500 shrink-0" />
-0" />
                   <div>
                     <h5 className="text-[11px] font-black text-rose-900 uppercase mb-1">Alerts: Load Exceeds Capacity</h5>
                     <p className="text-[9px] font-bold text-rose-700 leading-normal uppercase italic">Total orders: {selectedOrders.length} • Critical threshold reached</p>
@@ -554,10 +567,10 @@ export default function DispatchPlanning() {
 
               <button
                 onClick={handleAssign}
-                disabled={!selectedVehicle || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100}
-                className={`w-full py-6 rounded-[32px] font-black uppercase tracking-widest text-[11px] transition-all shadow-xl active:scale-95 ${!selectedVehicle || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100 ? 'bg-coffee-50 text-coffee-200 cursor-not-allowed shadow-none' : 'bg-[#D6D3D1] text-coffee-900 hover:bg-coffee-950 hover:text-white'}`}
+                disabled={!selectedVehicle || !selectedVehicleData?.assignedDriver || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100}
+                className={`w-full py-6 rounded-[32px] font-black uppercase tracking-widest text-[11px] transition-all shadow-xl active:scale-95 ${!selectedVehicle || !selectedVehicleData?.assignedDriver || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100 ? 'bg-coffee-50 text-coffee-200 cursor-not-allowed shadow-none' : 'bg-[#D6D3D1] text-coffee-900 hover:bg-coffee-950 hover:text-white'}`}
               >
-                Deploy Manifest
+                {selectedVehicle && !selectedVehicleData?.assignedDriver ? "Binding Required" : "Deploy Manifest"}
               </button>
             </div>
           </div>

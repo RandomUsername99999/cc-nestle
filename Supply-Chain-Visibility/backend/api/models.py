@@ -1,4 +1,6 @@
 from django.db import models
+# Bytecode refresh: 2026-04-16-11:10
+
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 
 class Role(models.Model):
@@ -52,7 +54,10 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return self.user_id
 
 from vehicles.models import Vehicle
-from drivers.models import Driver as DriverProfile
+# Lazy-load to prevent startup circularity
+def get_driver_profile_model():
+    from drivers.models import Driver
+    return Driver
 
 class Employee(models.Model):
     employee_id = models.AutoField(primary_key=True)

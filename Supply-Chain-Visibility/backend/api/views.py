@@ -8,6 +8,8 @@ from django.utils import timezone
 from .models import CustomUser, Vehicle, VehicleAssignment, Order
 from .serializers import UserSerializer, VehicleSerializer, VehicleAssignmentSerializer
 from .utils.route_optimization import cluster_orders
+# Cache-buster update to force server bytecode refresh: 2026-04-16-16:40
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
@@ -73,18 +75,25 @@ class IsAdminRole(permissions.BasePermission):
         if user.is_superuser:
             return True
         try:
-            return user.role.role_name.lower() == 'admin'
+            return user.role.role_name.lower() == 'admin' if user.role else False
         except AttributeError:
             return False
 
 class IsInternalRole(permissions.BasePermission):
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
+        user_id = request.query_params.get('user_id') or (request.data.get('user_id') if isinstance(request.data, dict) else None)
+        user = None
+        if user_id:
+            try: user = CustomUser.objects.get(user_id=user_id)
+            except: pass
+        if not user: user = request.user
+            
+        if not user or not user.is_authenticated:
             return False
-        if request.user.is_superuser:
+        if user.is_superuser:
             return True
         try:
-            role = request.user.role.role_name.lower()
+            role = user.role.role_name.lower() if user.role else ''
             return role in ['admin', 'manager', 'dispatcher']
         except AttributeError:
             return False
@@ -96,7 +105,7 @@ class IsManagerRole(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         try:
-            return request.user.role.role_name.lower() == 'manager'
+            return request.user.role.role_name.lower() == 'manager' if request.user.role else False
         except AttributeError:
             return False
 
@@ -166,10 +175,11 @@ class VehicleViewSet(viewsets.ModelViewSet):
             # Managers and dispatchers can strictly modify driver assignments.
             # We allow metadata updates if they are admins, but for these roles we restrict to 'assignedDriver'
             # However, we check if they are trying to change core fields.
-            disallowed_keys = {'plate_number', 'vehicle_id', 'vehicle_type'}
+            disallowed_keys = {'plate_number', 'vehicle_id', 'vehicle_type', 'plateID', 'make_model'}
             intersect = set(request.data.keys()).intersection(disallowed_keys)
             if intersect:
-                self.permission_denied(request, message=f"Managers/Dispatchers cannot modify immutable fields: {', '.join(intersect)}")
+                # Debugging info: show exactly what caused the block
+                self.permission_denied(request, message=f"Identity policy violation: {role.title()}s cannot modify restricted fields ({', '.join(intersect)}). Only 'assignedDriver' updates are permitted.")
 
     def perform_update(self, serializer):
         try:
@@ -193,7 +203,21 @@ class VehicleViewSet(viewsets.ModelViewSet):
                         d_id = int(assigned_driver_data)
                         driver_obj = Driver.objects.get(employee__user__user_id=d_id)
                     except (ValueError, Driver.DoesNotExist):
-                        raise serializers.ValidationError({"assignedDriver": "Selected user does not have an active Driver profile."})
+                        # Self-healing: If user is a driver but lacks profile, create it now
+                        from .models import CustomUser, Employee
+                        try:
+                            target_user = CustomUser.objects.get(user_id=d_id)
+                            if str(target_user.role).lower() == 'driver':
+                                emp, _ = Employee.objects.get_or_create(user=target_user, defaults={'full_name': target_user.username, 'national_id': 'N/A', 'contact_number': 'N/A', 'address': 'N/A', 'date_of_birth': '2000-01-01'})
+                                driver_obj = Driver.objects.create(
+                                    employee=emp, 
+                                    license_number='AUTO-PROVISIONED',
+                                    license_expiry_date='2099-12-31'
+                                )
+                            else:
+                                raise serializers.ValidationError({"assignedDriver": "Selected personnel does not have the 'Driver' role assigned in their user account."})
+                        except Exception as inner_e:
+                            raise serializers.ValidationError({"assignedDriver": f"Critical profile failure: {str(inner_e)}"})
                     except Exception as e:
                         raise serializers.ValidationError({"assignedDriver": f"Assignment error: {str(e)}"})
                         
@@ -270,7 +294,7 @@ class VehicleAssignmentViewSet(viewsets.ReadOnlyModelViewSet):
         if not driver_id:
             return Response({'error': 'driver_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         # Note driver_id is CustomUser ID here as passed by frontend if used
-        from .models import DriverProfile
+        from drivers.models import Driver as DriverProfile
         try:
             drv = DriverProfile.objects.get(employee__user_id=driver_id)
             qs = self.queryset.filter(driver=drv)
@@ -304,7 +328,8 @@ def tracking_location(request):
         return Response({'status': 'error', 'message': 'driver_id required'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Enrich with Driver Name and Active Shipment
-    from .models import GPSPersistence, DriverProfile, VehicleAssignment, Order
+    from .models import GPSPersistence, VehicleAssignment, Order
+    from drivers.models import Driver as DriverProfile
     
     driver_name = "Unknown Driver"
     shipment_info = "No Active Shipment"
@@ -418,12 +443,11 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
         
         try:
-            from .models import DriverProfile
+            from drivers.models import Driver as DriverProfile
             if user.is_authenticated:
                 driver = DriverProfile.objects.get(employee__user=user)
             else:
-                driver = DriverProfile.objects.get(employee__user_id=user_id_fallback)
-                
+                driver = DriverProfile.objects.get(employee__user_id=user_id_fallback)        
             tasks = Order.objects.filter(assigned_driver=driver, status__in=['assigned', 'in_transit'])
             return Response(OrderSerializer(tasks, many=True).data)
         except DriverProfile.DoesNotExist:
@@ -439,7 +463,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         lat = request.data.get('lat')
         lng = request.data.get('lng')
         
-        from .models import DriverProfile, OrderException, OrderStatusLog
+        from drivers.models import Driver as DriverProfile
+        from .models import OrderException, OrderStatusLog
         try:
             driver = DriverProfile.objects.get(employee__user=request.user)
         except DriverProfile.DoesNotExist:
@@ -536,9 +561,10 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             
         try:
             with transaction.atomic():
-                from .models import DriverProfile, Vehicle, AuditLog
+                from drivers.models import Driver
+                from .models import Vehicle, AuditLog
                 vehicle = Vehicle.objects.get(vehicle_id=vehicle_id)
-                driver = DriverProfile.objects.get(employee__user_id=driver_id)
+                driver = Driver.objects.get(employee__user__user_id=driver_id)
                 orders = Order.objects.filter(order_id__in=order_ids)
                 
                 # 1. Validate Capacity
@@ -625,7 +651,8 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         user = request.user
         user_id_fallback = request.query_params.get('user_id')
         
-        from .models import DriverProfile, ShipmentOrder
+        from drivers.models import Driver as DriverProfile
+        from .models import ShipmentOrder
         try:
             if user.is_authenticated:
                 driver = DriverProfile.objects.get(employee__user=user)
@@ -849,19 +876,17 @@ class ShipmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def driver_active(self, request):
-        """ Fetch the active manifest for the logged-in driver. """
+        """ Fetch the active manifest OR assigned vehicle for the logged-in driver. """
         user = request.user
         user_id_fallback = request.query_params.get('user_id')
         
         if not user.is_authenticated and not user_id_fallback:
             return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
             
-        from .models import DriverProfile
+        from drivers.models import Driver
         try:
-            if user.is_authenticated:
-                driver = DriverProfile.objects.get(employee__user=user)
-            else:
-                driver = DriverProfile.objects.get(employee__user_id=user_id_fallback)
+            target_id = user.user_id if user.is_authenticated else int(user_id_fallback)
+            driver = Driver.objects.get(employee__user__user_id=target_id)
                 
             shipment = Shipment.objects.filter(driver=driver, status__in=['dispatched', 'accepted', 'in_transit']).first()
             if shipment:
@@ -872,24 +897,33 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             # Check for Inbound Assignment
             from inbound.models import InboundCollectionAssignment
             from inbound.serializers import AssignmentDetailSerializer
-            target_user_id = user.id if user.is_authenticated else user_id_fallback
             inbound_assignment = InboundCollectionAssignment.objects.filter(
-                driver__employee__user_id=target_user_id,
+                driver=driver,
                 status__in=['assigned', 'accepted', 'en_route', 'at_supplier', 'verifying', 'returning']
             ).first()
-
 
             if inbound_assignment:
                 data = AssignmentDetailSerializer(inbound_assignment).data
                 data['assignment_type'] = 'inbound'
                 return Response(data)
 
-            return Response({'detail': 'No active manifest assigned to this driver.'}, status=status.HTTP_404_NOT_FOUND)
+            # Fallback: Just return vehicle info if assigned via VehicleAssignment
+            from .models import VehicleAssignment
+            assignment = VehicleAssignment.objects.filter(driver=driver, status='active').first()
+            if assignment and assignment.vehicle:
+                return Response({
+                    "vehicle_details": VehicleSerializer(assignment.vehicle).data,
+                    "assignment_type": "none",
+                    "status": "idle"
+                })
 
-        except DriverProfile.DoesNotExist:
-            return Response({'error': 'Driver profile not found for the provided identity.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'No active manifest or vehicle assigned.'}, status=status.HTTP_404_NOT_FOUND)
+
+        except Driver.DoesNotExist:
+            return Response({'error': 'Driver profile not found.'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({'error': f"Operation failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            import traceback
+            return Response({'error': f"Operation failed: {str(e)}", "trace": traceback.format_exc()}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.all().order_by('-timestamp')

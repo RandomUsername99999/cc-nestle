@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import CustomUser, Vehicle, Role, DriverProfile, VehicleAssignment, Employee, Customer, Order, AuditLog, Shipment, ShipmentOrder, OrderException, OrderStatusLog
+from .models import CustomUser, Vehicle, Role, VehicleAssignment, Employee, Customer, Order, AuditLog, Shipment, ShipmentOrder, OrderException, OrderStatusLog
+from drivers.models import Driver as DriverProfile
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -142,6 +143,18 @@ class UserSerializer(serializers.ModelSerializer):
                 for attr, value in employee_data.items():
                     setattr(employee, attr, value)
                 employee.save()
+            
+            # CRITICAL: Ensure Driver records exist for driver role transition
+            if str(instance.role).lower() == 'driver':
+                from drivers.models import Driver as DriverProfile
+                employee, _ = Employee.objects.get_or_create(user=instance, defaults={'full_name': instance.username, 'national_id': 'N/A', 'contact_number': 'N/A', 'address': 'N/A', 'date_of_birth': '2000-01-01'})
+                if not hasattr(employee, 'driver_profile'):
+                    DriverProfile.objects.create(
+                        employee=employee,
+                        license_number='PENDING-UPDATE',
+                        license_expiry_date='2099-12-31',
+                        license_type='heavy_vehicle'
+                    )
             
         return instance
 class VehicleSerializer(serializers.ModelSerializer):

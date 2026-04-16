@@ -6,7 +6,8 @@ except ImportError:
 import json
 import logging
 from django.conf import settings
-from .models import GPSPersistence, DriverProfile
+from .models import GPSPersistence
+from drivers.models import Driver as DriverProfile
 
 logger = logging.getLogger(__name__)
 

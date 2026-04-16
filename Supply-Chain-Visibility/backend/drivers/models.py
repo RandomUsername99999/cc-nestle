@@ -1,5 +1,9 @@
 from django.db import models
 
+# Safety Proxy to prevent framework circular import crashes
+class Vehicle:
+    pass
+
 class Driver(models.Model):
     driver_id = models.AutoField(primary_key=True)
     employee = models.OneToOneField('api.Employee', on_delete=models.CASCADE, related_name='driver_profile', db_column='employee_id')
@@ -12,7 +16,7 @@ class Driver(models.Model):
     status = models.CharField(max_length=20, default='available')
 
     def __str__(self):
-        return f"{self.employee.full_name} ({self.license_number})"
+        return f"{self.employee.full_name if self.employee else 'Unknown'} ({self.license_number})"
 
     @property
     def id(self):

@@ -116,12 +116,29 @@ export default function VehicleAssignments() {
         e.preventDefault();
         setLoading(true);
         try {
-            if(!selectedVehicleId || !selectedDriverId) throw new Error("Validation mismatch");
-            await api.patch(`vehicles/${selectedVehicleId}/`, { assignedDriver: parseInt(selectedDriverId) });
-            toast.success("Assignment Initialized");
+            if(!selectedVehicleId) throw new Error("Please select a target vehicle unit.");
+            if(!selectedDriverId) throw new Error("Please select an operative driver.");
+            
+            // Log for diagnostics
+            console.log(`Attempting binding: Vehicle[${selectedVehicleId}] -> Driver[${selectedDriverId}]`);
+            
+            const driverIdInt = parseInt(selectedDriverId);
+            if (isNaN(driverIdInt)) throw new Error("Invalid Driver ID format.");
+
+            const response = await api.patch(`vehicles/${selectedVehicleId}/`, { 
+                assignedDriver: driverIdInt 
+            });
+            
+            console.log("Binding success:", response.data);
+            toast.success("Assignment Initialized Successfully");
             setActivePopup(null);
             fetchData();
-        } catch(err) { toast.error("Deployment failed"); }
+        } catch(err) { 
+            console.error("Assignment failure details:", err);
+            const data = err.response?.data;
+            const errorMsg = data?.assignedDriver || data?.message || data?.detail || err.message || "Deployment failed";
+            toast.error(typeof errorMsg === 'string' ? errorMsg : "Profile inconsistency detected. Please check driver role."); 
+        }
         setLoading(false);
     };
 
@@ -137,8 +154,8 @@ export default function VehicleAssignments() {
                     className="bg-coffee-700 hover:bg-coffee-800 text-white px-6 py-3 rounded-2xl shadow-lg shadow-coffee-100 text-sm font-bold transition-all flex items-center transform active:scale-95"
                     onClick={() => {
                         setAssignmentFormType('ASSIGN');
-                        setSelectedVehicleId("");
-                        setSelectedDriverId("");
+                        setSelectedVehicleId(unassignedVehicles.length > 0 ? unassignedVehicles[0].id : "");
+                        setSelectedDriverId(availableDrivers.length > 0 ? availableDrivers[0].id : "");
                         setActivePopup('ASSIGNMENT_FORM');
                     }}
                 >

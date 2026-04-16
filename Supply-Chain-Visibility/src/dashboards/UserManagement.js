@@ -348,6 +348,15 @@ function AssignRolesPopup({ onClose }) {
                             </select>
                         </div>
 
+                        {newRole === 'driver' && userDoc.role !== 'driver' && (
+                            <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex gap-3 animate-fade-in">
+                                <BiCreditCard className="text-amber-600 text-xl shrink-0 mt-0.5"/>
+                                <p className="text-[11px] font-black text-amber-800 leading-relaxed uppercase tracking-wider">
+                                    Upgrade Notice: Promoting to Driver will automatically initialize a field authorization record. License details must be updated later.
+                                </p>
+                            </div>
+                        )}
+
                         <div className="flex justify-end gap-3 pt-2">
                             <button type="button" onClick={() => setUserDoc(null)} className="px-5 py-2.5 text-sm font-bold text-coffee-500 hover:bg-coffee-50 rounded-xl transition-all">Back</button>
                             <button type="submit" className="bg-coffee-600 hover:bg-coffee-700 text-white px-8 py-2.5 rounded-xl shadow-lg shadow-coffee-100 text-sm font-bold transition-all">Apply Modification</button>
