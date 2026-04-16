@@ -127,6 +127,7 @@ class _LoginCardState extends State<LoginCard> {
         // Persist session with JWT tokens for authenticated API calls
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('userId', userIdValue);
+        await prefs.setString('username', username);
         await prefs.setString('access_token', accessToken);
         await prefs.setString('refresh_token', refreshToken);
         await prefs.setString('user_role', userRole);

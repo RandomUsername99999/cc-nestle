@@ -21,24 +21,49 @@ function AddVehiclePopup({ onSuccess, onClose }) {
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         setLoading(true);
+        
         try {
-            await api.post('vehicles/', {
-                plate_number: plateNumber.toUpperCase(),
+            // Sanitize data: convert empty strings to null for backend DateField compatibility
+            const payload = {
+                plate_number: plateNumber.trim().toUpperCase(),
                 vehicle_type: vehicleType,
                 make_model: makeModel,
                 manufacturer: manufacturer,
-                year: parseInt(year),
-                capacity: parseFloat(capacity),
+                year: year ? parseInt(year) : null,
+                capacity: capacity ? parseFloat(capacity) : null,
                 volume: volume ? parseFloat(volume) : null,
-                registration_expiry: registrationExpiry,
-                insurance_expiry: insuranceExpiry,
+                registration_expiry: registrationExpiry || null,
+                insurance_expiry: insuranceExpiry || null,
                 is_refrigerated: isRefrigerated
-            });
+            };
+
+            await api.post('vehicles/', payload);
+            toast.success("Asset provisioned successfully");
             onSuccess();
         } catch (error) {
-            toast.error("Registration failed");
+            console.error("Full Registration Error Response:", error.response?.data);
+            const data = error.response?.data;
+            let errorMsg = "Registration failed";
+            
+            if (data) {
+                if (typeof data === 'string') {
+                    errorMsg = data.substring(0, 100);
+                } else if (data.message) {
+                    errorMsg = data.message;
+                } else if (data.detail) {
+                    errorMsg = data.detail;
+                } else {
+                    const firstField = Object.keys(data)[0];
+                    const message = Array.isArray(data[firstField]) ? data[firstField][0] : data[firstField];
+                    errorMsg = `${firstField}: ${message}`;
+                }
+            } else if (error.request) {
+                errorMsg = "Server not responding. Check your connection.";
+            }
+            
+            toast.error(errorMsg);
         }
         setLoading(false);
     };
@@ -51,7 +76,7 @@ function AddVehiclePopup({ onSuccess, onClose }) {
                     <p className="text-sm text-coffee-500 mt-1">Provision a new logistics unit into the active operational inventory.</p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8">
+                <form id="registration-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8">
                     {/* Identification */}
                     <div className="space-y-4">
                         <h3 className="text-sm font-bold text-coffee-900 border-l-4 border-coffee-500 pl-3">Asset Identification</h3>
@@ -97,7 +122,7 @@ function AddVehiclePopup({ onSuccess, onClose }) {
 
                 <div className="flex justify-end items-center pt-6 mt-6 border-t border-coffee-100 gap-3">
                     <button type="button" onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-coffee-400 hover:bg-coffee-50 rounded-xl transition-all">Cancel</button>
-                    <button onClick={handleSubmit} disabled={loading} className="bg-coffee-700 hover:bg-coffee-800 text-white px-8 py-3 rounded-xl shadow-lg shadow-coffee-100 text-sm font-bold transition-all disabled:opacity-70">
+                    <button type="submit" form="registration-form" disabled={loading} className="bg-coffee-700 hover:bg-coffee-800 text-white px-8 py-3 rounded-xl shadow-lg shadow-coffee-100 text-sm font-bold transition-all disabled:opacity-70">
                         {loading ? "Registering..." : "Provision Asset"}
                     </button>
                 </div>

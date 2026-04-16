@@ -23,6 +23,7 @@ class _HomePageState extends State<HomePage> {
   Map<String, dynamic>? _activeTask;
   bool _isLoadingTask = false;
   String? _accessToken;
+  String? _username;
   
   final String _baseApiUrl = "https://UnderpaidWorker.pythonanywhere.com/api/";
 
@@ -40,8 +41,63 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadToken() async {
     final prefs = await SharedPreferences.getInstance();
-    _accessToken = prefs.getString('access_token');
+    setState(() {
+      _accessToken = prefs.getString('access_token');
+      _username = prefs.getString('username') ?? 'User';
+    });
     _fetchActiveTask();
+  }
+
+  void _showVehicleInfo() {
+    final vehicle = _activeTask?['vehicle_details'];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("LOGISTICS ASSET", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFFBCAAA4), letterSpacing: 2)),
+                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (vehicle is Map) ...[
+               Text(vehicle['plate_number'] ?? "N/A", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
+               const SizedBox(height: 8),
+               Text(vehicle['vehicle_type'] ?? "Standard Unit", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF8D6E63))),
+               const SizedBox(height: 24),
+               _buildVehicleDetail(Icons.monitor_weight_outlined, "Capacity", "${vehicle['capacity']} KG"),
+               _buildVehicleDetail(Icons.ac_unit, "Refrigerated", vehicle['is_refrigerated'] == true ? "Yes" : "No"),
+            ] else
+               const Text("No vehicle currently assigned to this mission.", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVehicleDetail(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFFBCAAA4)),
+          const SizedBox(width: 12),
+          Text("$label: ", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4))),
+          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
+        ],
+      ),
+    );
   }
 
   Future<void> _fetchActiveTask() async {
@@ -113,6 +169,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
+    await prefs.remove('username');
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
@@ -166,36 +223,39 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 2. Driver Profile Header (Minimalist)
+                    // 2. Driver Profile Header (Minimalist Greeting)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "OPERATIONAL STATUS",
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFFBCAAA4), letterSpacing: 1.5),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: _isTracking ? Colors.green : Colors.red,
-                                    shape: BoxShape.circle,
+                        GestureDetector(
+                          onTap: _showVehicleInfo,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "HELLO, ${_username?.toUpperCase() ?? 'USER'}",
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: -0.5),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: _isTracking ? Colors.green : Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _isTracking ? "ONLINE / ACTIVE" : "OFFLINE / STANDBY",
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF3E2723)),
-                                ),
-                              ],
-                            ),
-                          ],
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _isTracking ? "ONLINE / ACTIVE" : "OFFLINE / STANDBY",
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFFBCAAA4), letterSpacing: 1),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                         IconButton(
                           onPressed: _logout,

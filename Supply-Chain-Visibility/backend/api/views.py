@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from django.utils import timezone
-from .models import CustomUser, Vehicle, VehicleAssignment
+from .models import CustomUser, Vehicle, VehicleAssignment, Order
 from .serializers import UserSerializer, VehicleSerializer, VehicleAssignmentSerializer
 from .utils.route_optimization import cluster_orders
 
@@ -153,59 +153,73 @@ class VehicleViewSet(viewsets.ModelViewSet):
     serializer_class = VehicleSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [IsInternalRole()]
-        return [IsAdminRole()]
+        return [IsInternalRole()]
 
     def check_object_permissions(self, request, obj):
         super().check_object_permissions(request, obj)
-        role = request.user.role.role_name.lower() if request.user.role else ''
-        if self.action == 'partial_update' and role in ['manager', 'dispatcher']:
-            allowed_keys = {'assignedDriver'}
-            request_keys = set(request.data.keys())
-            if not request_keys.issubset(allowed_keys):
-                self.permission_denied(request, message="Managers/Dispatchers can only modify driver assignments.")
+        user = request.user
+        if user.is_superuser:
+            return
+            
+        role = user.role.role_name.lower() if user.role else ''
+        if self.action in ['partial_update', 'update'] and role in ['manager', 'dispatcher']:
+            # Managers and dispatchers can strictly modify driver assignments.
+            # We allow metadata updates if they are admins, but for these roles we restrict to 'assignedDriver'
+            # However, we check if they are trying to change core fields.
+            disallowed_keys = {'plate_number', 'vehicle_id', 'vehicle_type'}
+            intersect = set(request.data.keys()).intersection(disallowed_keys)
+            if intersect:
+                self.permission_denied(request, message=f"Managers/Dispatchers cannot modify immutable fields: {', '.join(intersect)}")
 
     def perform_update(self, serializer):
-        assigned_driver_id = self.request.data.get('assignedDriver', -1)
-        vehicle = serializer.instance
-        
-        if assigned_driver_id != -1:
-            from django.utils import timezone
-            from .models import VehicleAssignment, DriverProfile
-            from rest_framework import serializers
-            now = timezone.now()
+        try:
+            assigned_driver_data = self.request.data.get('assignedDriver', -1)
+            vehicle = serializer.instance
             
-            # Close active vehicle assignment
-            VehicleAssignment.objects.filter(vehicle=vehicle, status='active').update(status='completed', assignment_end_date=now)
-            
-            if assigned_driver_id:
-                try:
-                    driver_obj = DriverProfile.objects.get(employee__user_id=assigned_driver_id)
-                except DriverProfile.DoesNotExist:
-                    raise serializers.ValidationError({"assignedDriver": "The selected user does not have a valid Driver Profile."})
-                except Exception as e:
-                    raise serializers.ValidationError({"assignedDriver": f"Error retrieving driver profile: {str(e)}"})
-                    
-                if driver_obj:
-                    # Enforce 1-to-1 bounds on the driver (close any active assignment for this driver)
-                    VehicleAssignment.objects.filter(driver=driver_obj, status='active').update(status='completed', assignment_end_date=now)
-                    
-                    VehicleAssignment.objects.create(
-                        driver=driver_obj,
-                        vehicle=vehicle,
-                        status='active',
-                        assignment_start_date=now,
-                        assigned_by=self.request.user
-                    )
-                    # Vehicle is now in use
-                    serializer.save(status='in_use')
+            # If assignedDriver was provided in the request (even if null or empty string)
+            if assigned_driver_data != -1:
+                from django.utils import timezone
+                from .models import VehicleAssignment
+                from drivers.models import Driver
+                from rest_framework import serializers
+                now = timezone.now()
+                
+                # Close existing active assignments for this vehicle
+                VehicleAssignment.objects.filter(vehicle=vehicle, status='active').update(status='completed', assignment_end_date=now)
+                
+                if assigned_driver_data and str(assigned_driver_data).strip():
+                    try:
+                        # Robust lookup: handle string or integer IDs
+                        d_id = int(assigned_driver_data)
+                        driver_obj = Driver.objects.get(employee__user__user_id=d_id)
+                    except (ValueError, Driver.DoesNotExist):
+                        raise serializers.ValidationError({"assignedDriver": "Selected user does not have an active Driver profile."})
+                    except Exception as e:
+                        raise serializers.ValidationError({"assignedDriver": f"Assignment error: {str(e)}"})
+                        
+                    if driver_obj:
+                        # Enforce 1-to-1: Close any currently active assignment for this specific driver
+                        VehicleAssignment.objects.filter(driver=driver_obj, status='active').update(status='completed', assignment_end_date=now)
+                        
+                        VehicleAssignment.objects.create(
+                            driver=driver_obj,
+                            vehicle=vehicle,
+                            status='active',
+                            assignment_start_date=now,
+                            assigned_by=self.request.user
+                        )
+                        # Mark vehicle as in use
+                        serializer.save(status='in_use')
+                else:
+                    # Explicit unassignment (null or empty string provided)
+                    serializer.save(status='available')
             else:
-                # Unassigning - vehicle is available
-                serializer.save(status='available')
-        else:
-            # Normal update (e.g. metadata)
-            serializer.save()
+                # Traditional update (metadata changes only)
+                serializer.save()
+        except Exception as e:
+            import traceback
+            from rest_framework import serializers
+            raise serializers.ValidationError({"assignedDriver": f"Server crash: {str(e)} | Tr: {traceback.format_exc()}"})
 
     @action(detail=True, methods=['get'])
     def capacity_fill_suggestions(self, request, pk=None):
@@ -711,7 +725,7 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             u_id = request.data.get('user_id')
             if u_id:
-                user = CustomUser.objects.filter(id=u_id).first()
+                user = CustomUser.objects.filter(user_id=u_id).first()
         
         order_mappings = ShipmentOrder.objects.filter(shipment=shipment)
         for m in order_mappings:
@@ -750,7 +764,7 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             u_id = request.data.get('user_id')
             if u_id:
-                user = CustomUser.objects.filter(id=u_id).first()
+                user = CustomUser.objects.filter(user_id=u_id).first()
 
         order_mappings = ShipmentOrder.objects.filter(shipment=shipment)
         for m in order_mappings:
@@ -801,7 +815,7 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             u_id = request.data.get('user_id')
             if u_id:
-                user = CustomUser.objects.filter(id=u_id).first()
+                user = CustomUser.objects.filter(user_id=u_id).first()
 
         old_status = order.status
         order.status = 'delivered'
@@ -971,7 +985,7 @@ except ImportError:
     firebase_db = None
 
 class DeliverySearchView(APIView):
-    permission_classes = [IsManagerRole]
+    permission_classes = [IsInternalRole]
 
     def get(self, request):
         from .search_service import DeliverySearchService
@@ -979,12 +993,13 @@ class DeliverySearchView(APIView):
         
         service = DeliverySearchService(
             user=request.user,
-            params=request.GET # Use raw GET for special keywords or pass cleaned_data
+            params=request.GET
         )
         results = service.execute()
         
         # Apply filters from django-filter
-        results = params.qs.filter(id__in=results.values_list('id', flat=True))
+        # Use order_id instead of id
+        results = params.qs.filter(order_id__in=results.values_list('order_id', flat=True))
         
         serializer = OrderSerializer(results, many=True)
         return Response({

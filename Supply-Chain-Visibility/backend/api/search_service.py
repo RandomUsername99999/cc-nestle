@@ -28,13 +28,14 @@ class DeliverySearchService:
                 ).filter(rank__gt=0.01).order_by('-rank')
             else:
                 # SQLite/MySQL fallback using icontains
-                qs = qs.filter(
-                    Q(delivery_address__icontains=q) |
-                    Q(assigned_driver__employee__full_name__icontains=q) |
-                    Q(assigned_vehicle__plate_number__icontains=q)
-                )
+                search_filter = Q(delivery_address__icontains=q) | \
+                                Q(assigned_driver__employee__full_name__icontains=q) | \
+                                Q(assigned_vehicle__plate_number__icontains=q) | \
+                                Q(warehouse_id__icontains=q) | \
+                                Q(warehouse_name__icontains=q)
                 if q.isdigit():
-                    qs = qs.filter(Q(order_id=int(q)) | Q(id__icontains=q)).distinct()
+                    search_filter |= Q(order_id=int(q))
+                qs = qs.filter(search_filter).distinct()
 
         if self.user.role and self.user.role.role_name.lower() == 'driver':
             qs = qs.filter(assigned_driver__user=self.user)

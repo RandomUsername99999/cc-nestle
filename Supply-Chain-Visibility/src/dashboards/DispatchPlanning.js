@@ -308,6 +308,20 @@ export default function DispatchPlanning() {
     );
   };
 
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+
+  // Debounce order search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (orderSearchQuery) {
+        fetchData({ q: orderSearchQuery });
+      } else if (orderSearchQuery === '') {
+        fetchData({});
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [orderSearchQuery]);
+
   return (
     <div className="min-h-screen bg-[#F8F7F4] pb-20 max-w-[1600px] mx-auto px-4 sm:px-12 animate-fade-in font-sans">
 
@@ -424,6 +438,8 @@ export default function DispatchPlanning() {
                     <input 
                         type="text" 
                         placeholder="Search orders..."
+                        value={orderSearchQuery}
+                        onChange={(e) => setOrderSearchQuery(e.target.value)}
                         className="w-full pl-14 pr-6 py-4 bg-coffee-50/30 border border-coffee-50 rounded-2xl text-[11px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-coffee-100 transition-all font-mono"
                     />
                 </div>

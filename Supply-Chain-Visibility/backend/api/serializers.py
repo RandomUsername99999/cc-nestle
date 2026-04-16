@@ -49,6 +49,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         return value
 
 class UserSerializer(serializers.ModelSerializer):
+    id = serializers.ReadOnlyField()
     role = serializers.SerializerMethodField()
     role_id = serializers.IntegerField(write_only=True, required=False)
     status = serializers.SerializerMethodField()
@@ -269,10 +270,11 @@ class ShipmentSerializer(serializers.ModelSerializer):
     orders = ShipmentOrderSerializer(source='order_mappings', many=True, read_only=True)
     vehicle_plate = serializers.CharField(source='vehicle.plate_number', read_only=True)
     driver_name = serializers.CharField(source='driver.employee.full_name', read_only=True)
+    vehicle_details = VehicleSerializer(source='vehicle', read_only=True)
 
     class Meta:
         model = Shipment
-        fields = ('shipment_id', 'vehicle', 'vehicle_plate', 'driver', 'driver_name', 'total_weight', 'total_volume', 'shipment_type', 'requires_refrigeration', 'status', 'created_at', 'deployed_at', 'orders')
+        fields = ('shipment_id', 'vehicle', 'vehicle_details', 'vehicle_plate', 'driver', 'driver_name', 'total_weight', 'total_volume', 'shipment_type', 'requires_refrigeration', 'status', 'created_at', 'deployed_at', 'orders')
 
 class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:
