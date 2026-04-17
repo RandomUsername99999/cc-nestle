@@ -103,8 +103,9 @@ export default function DispatchPlanning() {
 
       setOrders(hasQueryParams ? orderRes.data.results : orderRes.data);
       setVehicles(vehicleRes.data.filter(v => 
-        v.assignedDriver || 
-        ['idle', 'available', 'ready', 'active', 'in_use'].includes((v.status || "").toLowerCase())
+        v.assignedDriver && 
+        ['available', 'idle', 'ready'].includes((v.status || "").toLowerCase()) &&
+        (!v.current_load_weight || v.current_load_weight === 0)
       ));
 
       const mapping = {};
@@ -467,7 +468,28 @@ export default function DispatchPlanning() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-coffee-50/50">
-                  {orders.filter(o => o.status === 'pending').map(o => {
+                  {orders.filter(o => {
+                    if (o.status !== 'pending') return false;
+                    
+                    // Filter by search query if exists
+                    if (orderSearchQuery && !o.order_id.toString().includes(orderSearchQuery) && !o.delivery_address.toLowerCase().includes(orderSearchQuery.toLowerCase())) {
+                        return false;
+                    }
+
+                    // 1. Single Hub Constraint: Hide orders from other hubs if one is already selected
+                    if (selectedOrders.length > 0) {
+                      const firstOrder = orders.find(ord => ord.order_id === selectedOrders[0]);
+                      if (firstOrder && o.warehouse_id !== firstOrder.warehouse_id) return false;
+                    }
+
+                    // 2. Cold Chain Constraint: Hide refrigerated orders if selected vehicle can't handle them
+                    if (selectedVehicle) {
+                      const v = vehicles.find(veh => veh.id === selectedVehicle);
+                      if (v && o.requires_refrigeration && !v.is_refrigerated) return false;
+                    }
+
+                    return true;
+                  }).map(o => {
                     const isSelected = selectedOrders.includes(o.order_id);
                     return (
                       <tr
