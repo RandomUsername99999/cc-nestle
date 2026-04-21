@@ -11,13 +11,12 @@ const navItemsData = [
   { key: "dashboard", icon: <MdDashboard />, link: "/admin/dashboard" },
   { key: "orders", icon: <BiPackage />, link: "/admin/orders" },
   { key: "shipments", icon: <BiSelection />, link: "/admin/shipments" },
-  { key: "management", icon: <GiTruck />, link: "/admin/management" },
   { key: "tracker", icon: <MdLocationOn />, link: "/admin/livetracker" },
   { key: "dispatch", icon: <GiPathDistance />, link: "/admin/dispatch" },
   { key: "users", icon: <BiUser />, link: "/admin/users" },
   { key: "vehicles", icon: <GiTruck />, link: "/admin/vehicles" },
   { key: "audit", icon: <BiHistory />, link: "/admin/audit" },
-  { key: "inbound", icon: <BiSelection />, link: "/admin/inbound" },
+  { key: "supplierDeliveries", icon: <GiPathDistance />, link: "/admin/supplier-deliveries" },
   { key: "search", icon: <BiSearch />, link: "/admin/search" },
   { key: "reports", icon: <MdMap />, link: "/admin/reports" },
 ];
@@ -157,17 +156,17 @@ function VerticalNavbar({ sidebarOpen, userRole }) {
     if (item.key === "search") {
       return userRole === 'manager';
     }
-    // 4. Management page for admin and manager
-    if (item.key === "management") {
-      return ['admin', 'manager'].includes(userRole);
-    }
-    // 5. Shared internal modules
-    if (item.key === "orders" || item.key === "shipments" || item.key === "inbound" || item.key === "vehicles") {
+    // 4. Shared internal modules
+    if (item.key === "orders" || item.key === "shipments" || item.key === "vehicles") {
       return ['admin', 'manager', 'dispatcher'].includes(userRole);
+    }
+    // 5. Supplier deliveries restricted to dispatcher and manager
+    if (item.key === "supplierDeliveries") {
+      return ['manager', 'dispatcher'].includes(userRole);
     }
     // 6. Supplier specific modules
     if (userRole === 'supplier') {
-        return ['dashboard', 'orders', 'inbound', 'profile', 'settings'].includes(item.key);
+        return ['dashboard', 'orders', 'profile', 'settings'].includes(item.key);
     }
     return true;
   });

@@ -12,6 +12,9 @@ class Role(models.Model):
         managed = True
         db_table = 'roles'
 
+    def __str__(self):
+        return self.role_name
+
 class CustomUserManager(BaseUserManager):
     def create_user(self, username, email, password=None, **extra_fields):
         if not email:

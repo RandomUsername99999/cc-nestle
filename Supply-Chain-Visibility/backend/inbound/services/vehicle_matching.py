@@ -15,7 +15,7 @@ def find_eligible_vehicles(manifest: SupplierDeliveryManifest) -> list:
     candidates = Vehicle.objects.filter(
         status='available',
         capacity_kg__gte=manifest.total_weight_kg,
-        capacity_m3__gte=manifest.total_volume_m3,
+        capacity_volume__gte=manifest.total_volume_m3,
     )
 
     eligible = []
@@ -37,11 +37,15 @@ def find_eligible_vehicles(manifest: SupplierDeliveryManifest) -> list:
 
 
 def _check_capacity(vehicle, manifest) -> bool:
-    usable_kg = float(vehicle.capacity_kg) * CAPACITY_BUFFER_FACTOR
-    usable_m3 = float(vehicle.capacity_m3) * CAPACITY_BUFFER_FACTOR
+    v_cap_kg = float(vehicle.capacity_kg or 0)
+    v_cap_vol = float(vehicle.capacity_volume or 0)
+    
+    usable_kg = v_cap_kg * CAPACITY_BUFFER_FACTOR
+    usable_m3 = v_cap_vol * CAPACITY_BUFFER_FACTOR
+    
     return (
-        float(manifest.total_weight_kg) <= usable_kg and
-        float(manifest.total_volume_m3) <= usable_m3
+        float(manifest.total_weight_kg or 0) <= usable_kg and
+        float(manifest.total_volume_m3 or 0) <= usable_m3
     )
 
 
@@ -58,11 +62,15 @@ def _check_special_handling(vehicle, manifest) -> bool:
         # Check temperature range fits within vehicle's min/max
         if vehicle.vehicle_type not in FREEZER_CAPABLE_TYPES:
             return False
-        if manifest.temperature_min_c is not None and getattr(vehicle, 'temp_min_c', None) is not None:
-            if vehicle.temp_min_c > float(manifest.temperature_min_c):
+            
+        manifest_min = float(manifest.temperature_min_c) if manifest.temperature_min_c is not None else None
+        manifest_max = float(manifest.temperature_max_c) if manifest.temperature_max_c is not None else None
+        
+        if manifest_min is not None and getattr(vehicle, 'temp_min_c', None) is not None:
+            if float(vehicle.temp_min_c) > manifest_min:
                 return False
-        if manifest.temperature_max_c is not None and getattr(vehicle, 'temp_max_c', None) is not None:
-            if vehicle.temp_max_c < float(manifest.temperature_max_c):
+        if manifest_max is not None and getattr(vehicle, 'temp_max_c', None) is not None:
+            if float(vehicle.temp_max_c) < manifest_max:
                 return False
         return True
 

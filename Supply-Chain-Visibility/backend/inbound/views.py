@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from django.utils import timezone
-# Bytecode refresh: 2026-04-16-11:10
+# Bytecode refresh: 2026-04-17-11:03
 
 from django.db import transaction
 from django.db import models
@@ -55,8 +55,12 @@ class AssignmentCreateView(APIView):
         dock_number = request.data.get('dock_number')
 
         try:
-            vehicle = Vehicle.objects.get(id=vehicle_id)
-            driver  = Driver.objects.get(id=driver_id)
+            vehicle = Vehicle.objects.get(pk=vehicle_id)
+            # Try looking up by Driver PK first, then fall back to User ID mapping
+            try:
+                driver = Driver.objects.get(pk=driver_id)
+            except (Driver.DoesNotExist, ValueError):
+                driver = Driver.objects.get(employee__user__user_id=driver_id)
         except (Vehicle.DoesNotExist, Driver.DoesNotExist):
             return Response({'error': 'invalid_vehicle_or_driver'}, status=400)
 
@@ -69,16 +73,18 @@ class AssignmentCreateView(APIView):
                              'detail': f'Manifest requires {manifest.special_handling} but vehicle does not support it.'}, status=400)
 
         with transaction.atomic():
-            assignment = InboundCollectionAssignment.objects.create(
+            assignment, created = InboundCollectionAssignment.objects.update_or_create(
                 manifest=manifest,
-                driver=driver,
-                vehicle=vehicle,
-                status='assigned',
-                assigned_at=timezone.now(),
-                vehicle_capacity_ok=check['capacity_ok'],
-                vehicle_cooling_ok=check['cooling_ok'],
-                scheduled_pickup_time=scheduled_pickup_time,
-                dock_number=dock_number,
+                defaults={
+                    'driver': driver,
+                    'vehicle': vehicle,
+                    'status': 'assigned',
+                    'assigned_at': timezone.now(),
+                    'vehicle_capacity_ok': check['capacity_ok'],
+                    'vehicle_cooling_ok': check['cooling_ok'],
+                    'scheduled_pickup_time': scheduled_pickup_time if scheduled_pickup_time else None,
+                    'dock_number': dock_number,
+                }
             )
             manifest.status = 'assigned'
             manifest.save(update_fields=['status'])
@@ -134,7 +140,14 @@ class DepartureConfirmView(APIView):
         assignment = InboundCollectionAssignment.objects.get(id=pk)
         assignment.status     = 'en_route'
         assignment.departed_at = timezone.now()
-        assignment.save(update_fields=['status', 'departed_at'])
+        
+        with transaction.atomic():
+            assignment.save(update_fields=['status', 'departed_at'])
+            
+            # Sync manifest status
+            manifest = assignment.manifest
+            manifest.status = 'in_transit'
+            manifest.save(update_fields=['status'])
 
         if HAS_FIREBASE:
             try:
@@ -339,3 +352,37 @@ class LiveInboundView(APIView):
             except Exception as e:
                 return Response({'error': str(e)}, status=500)
         return Response({'error': 'Firebase disabled'}, status=503)
+
+class StartCollectionView(APIView):
+    """
+    Management dashboard endpoint to manually initiate a collection.
+    Transitions manifest to 'in_transit' and assignment to 'en_route'.
+    """
+    def post(self, request, manifest_id):
+        try:
+            manifest = SupplierDeliveryManifest.objects.get(id=manifest_id)
+            try:
+                assignment = manifest.assignment
+            except InboundCollectionAssignment.DoesNotExist:
+                return Response({'error': 'no_assignment_found', 'detail': 'Manifest must be assigned to a driver first.'}, status=400)
+
+            if manifest.status != 'assigned':
+                 return Response({'error': 'invalid_status', 'detail': f'Cannot start collection from status: {manifest.status}'}, status=400)
+
+            with transaction.atomic():
+                assignment.status = 'en_route'
+                assignment.departed_at = timezone.now()
+                assignment.save(update_fields=['status', 'departed_at'])
+
+                manifest.status = 'in_transit'
+                manifest.save(update_fields=['status'])
+
+            return Response({
+                'status': 'in_transit',
+                'manifest_id': str(manifest.id),
+                'assignment_id': str(assignment.id)
+            })
+        except SupplierDeliveryManifest.DoesNotExist:
+            return Response({'error': 'manifest_not_found'}, status=404)
+        except Exception as e:
+            return Response({'error': 'collection_start_failed', 'detail': str(e)}, status=500)

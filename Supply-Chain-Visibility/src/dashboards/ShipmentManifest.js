@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../api";
 import { 
     BiSearch, BiFilterAlt, BiPackage, BiUser, 
-    BiMapPin, BiCheckDouble, BiTimeFive, BiChevronRight, BiCube, BiSelection
+    BiMapPin, BiCheckDouble, BiTimeFive, BiChevronRight, BiCube, BiSelection, BiX
 } from "react-icons/bi";
 import { GiTruck } from "react-icons/gi";
 import { toast } from "react-hot-toast";
@@ -13,6 +13,7 @@ const ShipmentManifest = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedShipment, setSelectedShipment] = useState(null);
+    const [zoomedQR, setZoomedQR] = useState(null);
 
     useEffect(() => {
         fetchShipments();
@@ -63,7 +64,32 @@ const ShipmentManifest = () => {
     );
 
     return (
-        <div className="space-y-8 animate-fade-in px-4">
+        <div className="space-y-8 animate-fade-in px-4 relative">
+            {/* QR Zoom Modal */}
+            {zoomedQR && (
+                <div 
+                    className="fixed inset-0 z-[100] bg-coffee-950/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in"
+                    onClick={() => setZoomedQR(null)}
+                >
+                    <div 
+                        className="bg-white p-10 rounded-[40px] shadow-2xl relative flex flex-col items-center max-w-sm w-full animate-scale-up"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <button 
+                            onClick={() => setZoomedQR(null)}
+                            className="absolute top-6 right-6 p-2 bg-coffee-50 rounded-full text-coffee-600 hover:bg-coffee-100 transition-colors"
+                        >
+                            <BiX className="text-2xl" />
+                        </button>
+                        <div className="bg-white p-6 rounded-3xl border-4 border-coffee-900 shadow-inner mb-6">
+                            <QRCodeSVG value={zoomedQR.value} size={250} fgColor="#3E2723" />
+                        </div>
+                        <h3 className="text-xl font-black text-coffee-950 mb-1">Manifest QR Code</h3>
+                        <p className="text-sm text-coffee-400 font-bold uppercase tracking-widest">#{zoomedQR.id}</p>
+                    </div>
+                </div>
+            )}
+
             {/* Header Section */}
             <div className="bg-white p-6 rounded-[24px] shadow-sm border border-coffee-100 flex items-center justify-between">
                 <div>
@@ -108,7 +134,16 @@ const ShipmentManifest = () => {
                             >
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center space-x-4">
-                                        <div className="bg-white p-1.5 rounded-lg border border-coffee-100 shadow-sm shrink-0">
+                                        <div 
+                                            className="bg-white p-1.5 rounded-lg border border-coffee-100 shadow-sm shrink-0 hover:scale-110 hover:border-coffee-400 transition-all cursor-zoom-in"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setZoomedQR({
+                                                    id: `MF-${shipment.shipment_id}`,
+                                                    value: `${window.location.origin}/admin/shipments?id=${shipment.shipment_id}`
+                                                });
+                                            }}
+                                        >
                                             <QRCodeSVG value={`${window.location.origin}/admin/shipments?id=${shipment.shipment_id}`} size={36} fgColor="#3E2723" />
                                         </div>
                                         <div>

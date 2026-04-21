@@ -35,6 +35,13 @@ export default function DispatchPlanning() {
   const [isValidatingDock, setIsValidatingDock] = useState(false);
   const [assignStep, setAssignStep] = useState(1);
 
+  // Outbound Deployment States
+  const [showDeploymentPanel, setShowDeploymentPanel] = useState(false);
+  const [deploymentTime, setDeploymentTime] = useState('');
+  const [deploymentDock, setDeploymentDock] = useState('');
+  const [isValidatingOutboundDock, setIsValidatingOutboundDock] = useState(false);
+  const [isOutboundDockAvailable, setIsOutboundDockAvailable] = useState(null);
+
   useEffect(() => {
     fetchData();
     fetchInboundManifests();
@@ -89,6 +96,30 @@ export default function DispatchPlanning() {
     }
   }, [selectedInboundVehicle, vehicles]);
 
+  const checkOutboundDockAvailability = async (dock, time) => {
+    if (!dock || !time) return;
+    setIsValidatingOutboundDock(true);
+    try {
+      const response = await api.get('inbound/docks/availability/', {
+        params: { dock_number: dock, pickup_time: time }
+      });
+      setIsOutboundDockAvailable(response.data.available);
+    } catch (error) {
+      console.error("Dock validation failed", error);
+    } finally {
+      setIsValidatingOutboundDock(false);
+    }
+  };
+
+  useEffect(() => {
+    if (deploymentDock && deploymentTime) {
+      const timer = setTimeout(() => {
+        checkOutboundDockAvailability(deploymentDock, deploymentTime);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [deploymentDock, deploymentTime]);
+
   const fetchData = async (params = {}) => {
     setLoading(true);
     try {
@@ -104,7 +135,7 @@ export default function DispatchPlanning() {
       setOrders(hasQueryParams ? orderRes.data.results : orderRes.data);
       setVehicles(vehicleRes.data.filter(v => 
         v.assignedDriver && 
-        ['available', 'idle', 'ready'].includes((v.status || "").toLowerCase()) &&
+        (['available', 'idle', 'ready', 'in_use', 'active'].includes((v.status || "").toLowerCase())) &&
         (!v.current_load_weight || v.current_load_weight === 0)
       ));
 
@@ -195,7 +226,7 @@ export default function DispatchPlanning() {
     setShowFillModal(false);
   };
 
-  const handleAssign = async () => {
+  const handleAssign = () => {
     if (!selectedVehicle) {
       toast.error("Asset selection required for deployment.");
       return;
@@ -210,15 +241,34 @@ export default function DispatchPlanning() {
       return;
     }
 
+    setShowDeploymentPanel(true);
+  };
+
+  const finalizeDeployment = async () => {
+    if (!deploymentTime || !deploymentDock) {
+      toast.error("Scheduling details required for manifest activation.");
+      return;
+    }
+
+    if (isOutboundDockAvailable === false) {
+      toast.error("Constraint Violation: Selected dock is occupied.");
+      return;
+    }
+
     setLoading(true);
     try {
       await api.post('shipments/deploy_manifest/', {
         order_ids: selectedOrders,
         vehicle_id: selectedVehicleData.id,
-        driver_id: selectedVehicleData.assignedDriver
+        driver_id: selectedVehicleData.assignedDriver,
+        scheduled_load_time: deploymentTime,
+        dock_number: deploymentDock
       });
       toast.success(`Success: Manifest deployed to unit ${selectedVehicleData.plate_number}`);
       setSelectedOrders([]);
+      setShowDeploymentPanel(false);
+      setDeploymentTime('');
+      setDeploymentDock('');
       fetchData();
     } catch (err) {
       toast.error(err.response?.data?.error || "Execution Bridge Failure: Deployment Aborted");
@@ -822,6 +872,91 @@ export default function DispatchPlanning() {
         </div>
         <div className="absolute top-0 right-0 w-[500px] h-full bg-[#F8F7F4]/50 -skew-x-12 translate-x-32 group-hover:translate-x-20 transition-transform duration-1000"></div>
       </div>
+
+      {/* Manifest Deployment Side Panel */}
+      {showDeploymentPanel && (
+        <div className="fixed inset-0 z-[110] flex justify-end bg-coffee-950/20 backdrop-blur-md animate-in slide-in-from-right duration-500">
+          <div className="absolute inset-0" onClick={() => setShowDeploymentPanel(false)}></div>
+          <div className="w-[500px] bg-white border-l border-coffee-100 flex flex-col h-full shadow-2xl relative z-20 pt-20 p-12 overflow-y-auto">
+            <div className="flex justify-between items-center mb-10">
+               <div className="flex items-center gap-3">
+                  <div className="bg-coffee-950 p-2.5 rounded-xl text-white text-xl"><BiCalendar /></div>
+                  <h2 className="text-2xl font-black text-coffee-950 tracking-tighter">Scheduling Deployment</h2>
+               </div>
+               <button onClick={() => setShowDeploymentPanel(false)} className="bg-coffee-50 p-3 rounded-full text-coffee-400 hover:text-coffee-950 transition-colors">
+                 <BiChevronRight className="text-2xl" />
+               </button>
+            </div>
+
+            <div className="bg-coffee-50/50 p-8 rounded-[40px] mb-10 border border-coffee-100">
+                <p className="text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-3">Unit Allocation</p>
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-white rounded-2xl shadow-sm text-coffee-950">
+                    <GiTruck className="text-2xl" />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-black text-coffee-950">{selectedVehicleData?.plate_number}</h4>
+                    <p className="text-xs font-bold text-coffee-500 mt-1 uppercase">Driver: {selectedVehicleData?.driver_name}</p>
+                  </div>
+                </div>
+            </div>
+
+            <div className="space-y-10">
+                <div>
+                  <label className="block text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-4 px-1 flex items-center gap-2">
+                    <BiTime className="text-coffee-900" /> 1. Scheduled Load Time (UTC)
+                  </label>
+                  <input 
+                      type="datetime-local"
+                      value={deploymentTime}
+                      onChange={(e) => setDeploymentTime(e.target.value)}
+                      className="w-full bg-white border border-coffee-100 rounded-[24px] p-6 text-[11px] font-black text-coffee-950 outline-none focus:ring-4 focus:ring-coffee-100 transition-all font-mono shadow-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-coffee-400 uppercase tracking-widest mb-4 px-1 flex items-center gap-2">
+                    <BiMapPin className="text-coffee-900" /> 2. Dispatch Bay / Dock Door
+                  </label>
+                  <div className="relative">
+                      <select 
+                          value={deploymentDock}
+                          onChange={(e) => setDeploymentDock(e.target.value)}
+                          className={`w-full bg-white border ${isOutboundDockAvailable === false ? 'border-rose-300 ring-4 ring-rose-50' : isOutboundDockAvailable === true ? 'border-emerald-300 ring-4 ring-emerald-50' : 'border-coffee-100'} rounded-[24px] p-6 text-sm font-black text-coffee-950 outline-none focus:ring-4 focus:ring-coffee-100 transition-all appearance-none cursor-pointer shadow-sm`}
+                      >
+                          <option value="">Select Dock Number</option>
+                          {['BAY-1', 'BAY-2', 'BAY-3', 'BAY-4', 'BAY-5', 'DOOR-A', 'DOOR-B', 'DOOR-C'].map(dock => (
+                              <option key={dock} value={dock}>{dock}</option>
+                          ))}
+                      </select>
+                      <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <BiChevronDown className="text-2xl text-coffee-300" />
+                      </div>
+                  </div>
+                  {isOutboundDockAvailable === false && (
+                    <div className="mt-4 p-4 bg-rose-50 rounded-2xl border border-rose-100 flex items-center gap-3">
+                      <AlertCircle size={16} className="text-rose-500" />
+                      <p className="text-[10px] font-black text-rose-600 uppercase italic">Selected bay is occupied for this window</p>
+                    </div>
+                  )}
+                </div>
+            </div>
+
+            <div className="mt-auto pt-10">
+              <button 
+                onClick={finalizeDeployment}
+                disabled={!deploymentTime || !deploymentDock || isOutboundDockAvailable === false || loading}
+                className="w-full py-6 bg-coffee-950 text-white font-black uppercase text-[11px] tracking-widest rounded-[32px] transition-all shadow-2xl shadow-coffee-900/40 active:scale-95 disabled:opacity-30 disabled:shadow-none"
+              >
+                {loading ? 'Processing...' : 'Confirm & Deploy Fleet'}
+              </button>
+              <p className="text-center text-[9px] font-black text-coffee-300 uppercase tracking-[0.2em] mt-6">
+                Broadcast notification will be sent to driver
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Suggestion Modal (Retained logic but updated for new UI consistency) */}
       {showFillModal && (

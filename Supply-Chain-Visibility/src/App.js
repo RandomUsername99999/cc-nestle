@@ -20,6 +20,8 @@ import InboundProcurement from './dashboards/InboundProcurement';
 import Profile from './dashboards/Profile';
 import Settings from './dashboards/Settings';
 import DeliveryManagement from './dashboards/DeliveryManagement';
+import ManagerDashboard from './dashboards/ManagerDashboard';
+import SupplierDeliveryManagement from './dashboards/SupplierDeliveryManagement';
 
 import api from './api';
 import './App.css';
@@ -34,7 +36,7 @@ function App() {
       driver: <DriverDashboard />,
       dispatcher: <DispatcherDashboard />,
       admin: <AdminDashboard />,
-      manager: <AdminDashboard />,
+      manager: <ManagerDashboard />,
       customer: <div className="p-8"><h1 className="text-2xl font-bold text-slate-800">Customer Dashboard</h1><p>Welcome to your logistics portal tracking.</p></div>
     }
   };
@@ -167,11 +169,10 @@ function App() {
           <Route path='/admin/users' element={role === 'admin' ? <UserManagement /> : <Navigate to='/admin/dashboard' />} />
           <Route path='/admin/vehicles' element={['admin', 'manager', 'dispatcher'].includes(role) ? <VehicleManagement /> : <Navigate to='/admin/dashboard' />} />
           <Route path='/admin/audit' element={role === 'admin' ? <AuditLog /> : <Navigate to='/admin/dashboard' />} />
-          <Route path='/admin/inbound' element={['admin', 'manager'].includes(role) ? <InboundProcurement /> : <Navigate to='/admin/dashboard' />} />
           <Route path='/admin/search' element={['admin', 'manager'].includes(role) ? <div className="p-8"><h1 className="text-2xl font-bold">Advanced Search</h1><p>Manager console for data mining.</p></div> : <Navigate to='/admin/dashboard' />} />
           <Route path='/admin/profile' element={<Profile />} />
           <Route path='/admin/settings' element={<Settings />} />
-          <Route path='/admin/management' element={['admin', 'manager'].includes(role) ? <DeliveryManagement /> : <Navigate to='/admin/dashboard' />} />
+          <Route path='/admin/supplier-deliveries' element={['manager', 'dispatcher'].includes(role) ? <SupplierDeliveryManagement /> : <Navigate to='/admin/dashboard' />} />
         </Route>
 
       </Routes>

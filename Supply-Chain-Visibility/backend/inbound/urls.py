@@ -7,6 +7,7 @@ from .views import (
     WarehouseArrivalScanView,
     AssignmentCompleteView, LiveInboundView,
     DockAvailabilityView,
+    StartCollectionView,
 )
 
 
@@ -15,6 +16,7 @@ urlpatterns = [
     path('manifests/',                         ManifestListCreateView.as_view()),
     path('manifests/<uuid:pk>/',               ManifestDetailView.as_view()),
     path('manifests/<uuid:manifest_id>/assign/', AssignmentCreateView.as_view()),
+    path('manifests/<uuid:manifest_id>/start_collection/', StartCollectionView.as_view()),
     path('docks/availability/',                DockAvailabilityView.as_view()),
 
 

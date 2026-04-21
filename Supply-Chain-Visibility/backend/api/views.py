@@ -13,7 +13,7 @@ from .models import (
 from vehicles.models import Vehicle
 from .serializers import UserSerializer, VehicleSerializer, VehicleAssignmentSerializer
 from .utils.route_optimization import cluster_orders
-# Cache-buster update to force server bytecode refresh: 2026-04-16-16:50
+# Cache-buster update to force server bytecode refresh: 2026-04-17-11:03
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -227,7 +227,9 @@ class VehicleViewSet(viewsets.ModelViewSet):
                         from .models import CustomUser, Employee
                         try:
                             target_user = CustomUser.objects.get(user_id=d_id)
-                            if str(target_user.role).lower() == 'driver':
+                            # Use role_name for explicit check
+                            actual_role = target_user.role.role_name if target_user.role else "None"
+                            if actual_role.lower() == 'driver':
                                 emp, _ = Employee.objects.get_or_create(user=target_user, defaults={'full_name': target_user.username, 'national_id': 'N/A', 'contact_number': 'N/A', 'address': 'N/A', 'date_of_birth': '2000-01-01'})
                                 driver_obj = Driver.objects.create(
                                     employee=emp, 
@@ -235,11 +237,18 @@ class VehicleViewSet(viewsets.ModelViewSet):
                                     license_expiry_date='2099-12-31'
                                 )
                             else:
-                                raise serializers.ValidationError({"assignedDriver": "Selected personnel does not have the 'Driver' role assigned in their user account."})
+                                raise serializers.ValidationError(f"Selected personnel has the '{actual_role}' role. Assignment requires the 'Driver' role.")
+                        except serializers.ValidationError as ve:
+                            # Re-raise validation errors directly
+                            raise ve
                         except Exception as inner_e:
-                            raise serializers.ValidationError({"assignedDriver": f"Critical profile failure: {str(inner_e)}"})
+                            raise serializers.ValidationError(f"Critical profile failure: {str(inner_e)}")
+                    except serializers.ValidationError as ve:
+                        # Re-raise validation errors directly to skip the outer broad catch-all if possible
+                        # but we need to ensure the outer catch-all doesn't wrap it again with "Server crash"
+                        raise ve
                     except Exception as e:
-                        raise serializers.ValidationError({"assignedDriver": f"Assignment error: {str(e)}"})
+                        raise serializers.ValidationError(f"Assignment error: {str(e)}")
                         
                     if driver_obj:
                         # Enforce 1-to-1: Close any currently active assignment for this specific driver
@@ -260,6 +269,9 @@ class VehicleViewSet(viewsets.ModelViewSet):
             else:
                 # Traditional update (metadata changes only)
                 serializer.save()
+        except serializers.ValidationError as ve:
+            # Propagate validation errors directly (e.g. role check failures)
+            raise ve
         except Exception as e:
             import traceback
             from rest_framework import serializers
