@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, Role, VehicleAssignment, Employee, Customer, Order, AuditLog, Shipment, ShipmentOrder, OrderException, OrderStatusLog
+from .models import CustomUser, Role, VehicleAssignment, Employee, Customer, Order, AuditLog, Shipment, ShipmentOrder, OrderException, OrderStatusLog, ProofOfDelivery
 from vehicles.models import Vehicle
 from drivers.models import Driver as DriverProfile
 
@@ -302,4 +302,9 @@ class OrderExceptionSerializer(serializers.ModelSerializer):
 class OrderStatusLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderStatusLog
+        fields = '__all__'
+
+class ProofOfDeliverySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProofOfDelivery
         fields = '__all__'

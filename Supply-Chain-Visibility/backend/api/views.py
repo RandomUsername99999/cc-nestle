@@ -8,10 +8,14 @@ from django.utils import timezone
 from .models import (
     CustomUser, VehicleAssignment, Order, AuditLog, 
     Shipment, ShipmentOrder, OrderException, OrderStatusLog,
-    Role, Employee, GPSPersistence
+    Role, Employee, GPSPersistence, ProofOfDelivery
 )
 from vehicles.models import Vehicle
-from .serializers import UserSerializer, VehicleSerializer, VehicleAssignmentSerializer
+from .serializers import (
+    UserSerializer, VehicleSerializer, VehicleAssignmentSerializer,
+    ProofOfDeliverySerializer, OrderSerializer, AuditLogSerializer,
+    ShipmentSerializer, OrderExceptionSerializer, OrderStatusLogSerializer
+)
 from .utils.route_optimization import cluster_orders
 # Cache-buster update to force server bytecode refresh: 2026-04-17-11:03
 
@@ -1177,4 +1181,202 @@ class ChangePasswordView(APIView):
         )
 
         return Response({'detail': 'Password updated successfully.'}, status=status.HTTP_200_OK)
+
+class ProofOfDeliveryViewSet(viewsets.ModelViewSet):
+    queryset = ProofOfDelivery.objects.all().order_by('-timestamp')
+    serializer_class = ProofOfDeliverySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=True, methods=['get'])
+    def download_pod(self, request, pk=None):
+        pod = self.get_object()
+        from .utils.document_generator import generate_pdf_response, draw_header, draw_section
+        
+        def content(p, w, h):
+            draw_header(p, w, h, f"Proof Of Delivery - Order #{pod.order.order_id}")
+            y = h - 100
+            y = draw_section(p, 100, y, "Order Information", [
+                f"Customer: {pod.order.customer_profile.business_name if pod.order.customer_profile else 'N/A'}",
+                f"Delivery Address: {pod.order.delivery_address}",
+                f"Delivered At: {pod.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+            ])
+            y = draw_section(p, 100, y, "Recipient Information", [
+                f"Name: {pod.recipient_name}",
+                "Signature: [Image Placeholder]"
+            ])
+            if pod.latitude and pod.longitude:
+                y = draw_section(p, 100, y, "Location Verification", [
+                    f"Coordinates: {pod.latitude}, {pod.longitude}"
+                ])
+        
+        return generate_pdf_response(f"POD_{pod.order.order_id}", content)
+
+class OrderExceptionViewSet(viewsets.ModelViewSet):
+    queryset = OrderException.objects.all().order_by('-reported_at')
+    serializer_class = OrderExceptionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class ReportViewSet(viewsets.ViewSet):
+    permission_classes = [IsInternalRole]
+
+    @action(detail=False, methods=['get'])
+    def vehicle_assignments(self, request):
+        from .utils.document_generator import generate_pdf_response, draw_header
+        from .models import VehicleAssignment
+        
+        assignments = VehicleAssignment.objects.filter(status='active').select_related('vehicle', 'driver__employee')
+        
+        def content(p, w, h):
+            draw_header(p, w, h, "Vehicle Assignment Sheet")
+            y = h - 110
+            p.setFont("Helvetica-Bold", 10)
+            p.drawString(100, y, "Vehicle")
+            p.drawString(250, y, "Driver")
+            p.drawString(400, y, "Assigned Since")
+            p.line(100, y-5, w-100, y-5)
+            
+            y -= 20
+            p.setFont("Helvetica", 9)
+            for a in assignments:
+                p.drawString(100, y, f"{a.vehicle.plate_number} ({a.vehicle.model})")
+                p.drawString(250, y, a.driver.employee.full_name)
+                p.drawString(400, y, a.assignment_start_date.strftime('%Y-%m-%d'))
+                y -= 15
+                if y < 50:
+                    p.showPage()
+                    y = h - 50
+        
+        return generate_pdf_response("Vehicle_Assignments", content)
+
+    @action(detail=False, methods=['get'])
+    def driver_trip_logs(self, request):
+        from .utils.document_generator import generate_pdf_response, draw_header
+        from drivers.models import TripLog
+        
+        logs = TripLog.objects.all().order_by('-start_time')
+        
+        def content(p, w, h):
+            draw_header(p, w, h, "Driver Trip Logs")
+            y = h - 110
+            p.setFont("Helvetica-Bold", 9)
+            p.drawString(50, y, "Date")
+            p.drawString(120, y, "Driver")
+            p.drawString(220, y, "Vehicle")
+            p.drawString(300, y, "Start")
+            p.drawString(380, y, "End")
+            p.drawString(450, y, "Mileage")
+            p.drawString(520, y, "Fuel")
+            p.line(50, y-5, w-50, y-5)
+            
+            y -= 20
+            p.setFont("Helvetica", 8)
+            for l in logs:
+                p.drawString(50, y, l.start_time.strftime('%Y-%m-%d'))
+                p.drawString(120, y, l.driver.employee.full_name[:20])
+                p.drawString(220, y, l.vehicle.plate_number)
+                p.drawString(300, y, l.start_time.strftime('%H:%M'))
+                p.drawString(380, y, l.end_time.strftime('%H:%M') if l.end_time else 'N/A')
+                p.drawString(450, y, f"{l.start_mileage} - {l.end_mileage if l.end_mileage else '...'}")
+                p.drawString(520, y, f"{l.fuel_consumed if l.fuel_consumed else '0'} L")
+                y -= 15
+                if y < 50:
+                    p.showPage()
+                    y = h - 50
+        
+        return generate_pdf_response("Driver_Trip_Logs", content)
+
+    @action(detail=False, methods=['get'])
+    def delivery_performance(self, request):
+        from .utils.document_generator import generate_pdf_response, draw_header, draw_section
+        from .models import Order
+        
+        total_orders = Order.objects.count()
+        delivered = Order.objects.filter(status='delivered').count()
+        failed = Order.objects.filter(status='delivery_failed').count()
+        pending = Order.objects.filter(status='pending').count()
+        
+        on_time_rate = (delivered / total_orders * 100) if total_orders > 0 else 0
+        
+        def content(p, w, h):
+            draw_header(p, w, h, "Delivery Performance Analytics")
+            y = h - 100
+            y = draw_section(p, 100, y, "Summary Metrics", [
+                f"Total Orders: {total_orders}",
+                f"Successfully Delivered: {delivered}",
+                f"Failed Deliveries: {failed}",
+                f"Pending/In-Transit: {pending}",
+                f"On-Time Delivery Rate: {on_time_rate:.1f}%"
+            ])
+            
+            # Add a simple chart or more details if needed
+            p.drawString(100, y, "Operational Insight:")
+            p.drawString(110, y-15, f"Current performance is {'stable' if on_time_rate > 90 else 'needs improvement'}.")
+            
+        return generate_pdf_response("Delivery_Performance", content)
+
+    @action(detail=False, methods=['get'])
+    def failed_deliveries(self, request):
+        from .utils.document_generator import generate_pdf_response, draw_header
+        from .models import OrderException
+        
+        exceptions = OrderException.objects.all().order_by('-reported_at')
+        
+        def content(p, w, h):
+            draw_header(p, w, h, "Failed Delivery Report")
+            y = h - 110
+            p.setFont("Helvetica-Bold", 10)
+            p.drawString(100, y, "Order ID")
+            p.drawString(180, y, "Reason")
+            p.drawString(350, y, "Driver")
+            p.drawString(500, y, "Date")
+            p.line(100, y-5, w-100, y-5)
+            
+            y -= 20
+            p.setFont("Helvetica", 9)
+            for e in exceptions:
+                p.drawString(100, y, f"ORD-{e.order.order_id}")
+                p.drawString(180, y, e.exception_type)
+                p.drawString(350, y, e.driver.employee.full_name)
+                p.drawString(500, y, e.reported_at.strftime('%Y-%m-%d'))
+                y -= 15
+                if y < 50:
+                    p.showPage()
+                    y = h - 50
+        
+        return generate_pdf_response("Failed_Deliveries", content)
+
+    @action(detail=False, methods=['get'])
+    def stock_transfers(self, request):
+        from .utils.document_generator import generate_pdf_response, draw_header
+        from warehouses.models import StockTransfer
+        
+        transfers = StockTransfer.objects.all().order_by('-created_at')
+        
+        def content(p, w, h):
+            draw_header(p, w, h, "Stock Transfer Report")
+            y = h - 110
+            p.setFont("Helvetica-Bold", 9)
+            p.drawString(50, y, "Item")
+            p.drawString(150, y, "From")
+            p.drawString(280, y, "To")
+            p.drawString(410, y, "Qty")
+            p.drawString(460, y, "Status")
+            p.drawString(520, y, "Date")
+            p.line(50, y-5, w-50, y-5)
+            
+            y -= 20
+            p.setFont("Helvetica", 8)
+            for t in transfers:
+                p.drawString(50, y, t.item_name[:20])
+                p.drawString(150, y, t.source_warehouse.name[:25])
+                p.drawString(280, y, t.destination_warehouse.name[:25])
+                p.drawString(410, y, str(t.quantity))
+                p.drawString(460, y, t.status)
+                p.drawString(520, y, t.created_at.strftime('%Y-%m-%d'))
+                y -= 15
+                if y < 50:
+                    p.showPage()
+                    y = h - 50
+        
+        return generate_pdf_response("Stock_Transfers", content)
 

@@ -233,9 +233,18 @@ class OrderStatusLog(models.Model):
         db_table = 'order_status_logs'
 
 class OrderException(models.Model):
+    EXCEPTION_CHOICES = [
+        ('no_answer', 'No Answer'),
+        ('address_not_found', 'Address Not Found'),
+        ('refused', 'Refused by Customer'),
+        ('damaged', 'Damaged in Transit'),
+        ('traffic_delay', 'Traffic Delay'),
+        ('vehicle_breakdown', 'Vehicle Breakdown'),
+        ('other', 'Other')
+    ]
     exception_id = models.AutoField(primary_key=True)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='exceptions')
-    exception_type = models.CharField(max_length=50) # No answer, Address not found, Refused, Damaged
+    exception_type = models.CharField(max_length=50, choices=EXCEPTION_CHOICES) # No answer, Address not found, Refused, Damaged
     reported_at = models.DateTimeField(auto_now_add=True)
     driver = models.ForeignKey('drivers.Driver', on_delete=models.CASCADE)
     location_lat = models.DecimalField(max_digits=10, decimal_places=8)
@@ -245,6 +254,20 @@ class OrderException(models.Model):
     class Meta:
         managed = True
         db_table = 'order_exceptions'
+
+class ProofOfDelivery(models.Model):
+    pod_id = models.AutoField(primary_key=True)
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='pod')
+    recipient_name = models.CharField(max_length=150)
+    signature_image_url = models.TextField(null=True, blank=True)
+    photo_url = models.TextField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = 'proof_of_delivery'
 
 class AuditLog(models.Model):
     log_id = models.AutoField(primary_key=True)

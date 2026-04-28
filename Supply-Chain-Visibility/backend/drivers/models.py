@@ -25,3 +25,18 @@ class Driver(models.Model):
     class Meta:
         managed = True
         db_table = 'drivers'
+
+class TripLog(models.Model):
+    log_id = models.AutoField(primary_key=True)
+    driver = models.ForeignKey(Driver, on_delete=models.CASCADE, related_name='trip_logs')
+    vehicle = models.ForeignKey('vehicles.Vehicle', on_delete=models.CASCADE, related_name='trip_logs', db_column='vehicle_id')
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField(null=True, blank=True)
+    start_mileage = models.DecimalField(max_digits=10, decimal_places=2)
+    end_mileage = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    fuel_consumed = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        managed = True
+        db_table = 'driver_trip_logs'

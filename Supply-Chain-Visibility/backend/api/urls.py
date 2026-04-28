@@ -9,7 +9,8 @@ from .views import (
     UserViewSet, VehicleViewSet, VehicleAssignmentViewSet, 
     CustomTokenObtainPairView, OrderViewSet, AuditLogViewSet, 
     dispatch_recommendations, ShipmentViewSet,
-    DeliverySearchView, LiveVehicleView, OrderAuditView, ChangePasswordView
+    DeliverySearchView, LiveVehicleView, OrderAuditView, ChangePasswordView,
+    ProofOfDeliveryViewSet, ReportViewSet, OrderExceptionViewSet
 )
 from .serializers import UserSerializer, VehicleSerializer, VehicleAssignmentSerializer
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -28,6 +29,9 @@ router.register(r'assignments', VehicleAssignmentViewSet, basename='assignments'
 router.register(r'orders', OrderViewSet)
 router.register(r'shipments', ShipmentViewSet)
 router.register(r'audit-logs', AuditLogViewSet)
+router.register(r'pods', ProofOfDeliveryViewSet)
+router.register(r'reports', ReportViewSet, basename='reports')
+router.register(r'exceptions', OrderExceptionViewSet)
 
 urlpatterns = [
     path('me/', current_user),
