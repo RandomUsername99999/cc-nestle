@@ -110,13 +110,51 @@ export default function ManagerDashboard() {
         }
     };
 
-    const downloadReport = (endpoint, filename) => {
-        window.open(`${api.defaults.baseURL}reports/${endpoint}/`, '_blank');
-        toast.success(`Downloading ${filename}`);
+    const downloadReport = async (endpoint, filename) => {
+        try {
+            toast.loading(`Preparing ${filename}...`);
+            const response = await api.get(`reports/${endpoint}/`, {
+                responseType: 'blob',
+            });
+            
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `${filename}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            toast.dismiss();
+            toast.success(`${filename} downloaded`);
+        } catch (err) {
+            toast.dismiss();
+            toast.error(`Failed to generate ${filename}`);
+        }
     };
 
-    const downloadPOD = (podId) => {
-        window.open(`${api.defaults.baseURL}pods/${podId}/download_pod/`, '_blank');
+    const downloadPOD = async (podId) => {
+        try {
+            toast.loading(`Fetching POD...`);
+            const response = await api.get(`pods/${podId}/download_pod/`, {
+                responseType: 'blob',
+            });
+            
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `POD_${podId}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            toast.dismiss();
+        } catch (err) {
+            toast.dismiss();
+            toast.error("Failed to download Proof of Delivery");
+        }
     };
 
     const stats = {
