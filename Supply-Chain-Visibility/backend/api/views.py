@@ -1241,7 +1241,7 @@ class ReportViewSet(viewsets.ViewSet):
                 for a in assignments:
                     v_info = a.vehicle.plate_number if (a.vehicle and hasattr(a.vehicle, 'plate_number')) else "Unknown"
                     d_info = a.driver.employee.full_name if (a.driver and a.driver.employee) else "Unassigned"
-                    date_info = a.assigned_at.strftime('%Y-%m-%d') if hasattr(a, 'assigned_at') and a.assigned_at else "N/A"
+                    date_info = a.assignment_start_date.strftime('%Y-%m-%d') if hasattr(a, 'assignment_start_date') and a.assignment_start_date else "N/A"
                     
                     p.drawString(100, y, v_info)
                     p.drawString(250, y, d_info)

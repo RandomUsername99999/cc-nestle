@@ -15,7 +15,10 @@ def generate_pdf_response(filename, content_callback):
     p.save()
     
     buffer.seek(0)
-    response = HttpResponse(buffer, content_type='application/pdf')
+    pdf_data = buffer.getvalue()
+    buffer.close()
+    
+    response = HttpResponse(pdf_data, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
     return response
 
