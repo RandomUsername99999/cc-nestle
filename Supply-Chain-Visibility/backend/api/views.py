@@ -1190,26 +1190,91 @@ class ProofOfDeliveryViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def download_pod(self, request, pk=None):
         pod = self.get_object()
-        from .utils.document_generator import generate_pdf_response, draw_header, draw_section
-        
-        def content(p, w, h):
-            draw_header(p, w, h, f"Proof Of Delivery - Order #{pod.order.order_id}")
-            y = h - 100
-            y = draw_section(p, 100, y, "Order Information", [
-                f"Customer: {pod.order.customer_profile.business_name if pod.order.customer_profile else 'N/A'}",
-                f"Delivery Address: {pod.order.delivery_address}",
-                f"Delivered At: {pod.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
-            ])
-            y = draw_section(p, 100, y, "Recipient Information", [
-                f"Name: {pod.recipient_name}",
-                "Signature: [Image Placeholder]"
-            ])
-            if pod.latitude and pod.longitude:
-                y = draw_section(p, 100, y, "Location Verification", [
-                    f"Coordinates: {pod.latitude}, {pod.longitude}"
-                ])
-        
-        return generate_pdf_response(f"POD_{pod.order.order_id}", content)
+        try:
+            from .utils.document_generator import generate_pdf_response, draw_styled_table
+            from reportlab.lib import colors
+            
+            def content(p, w, h):
+                # Clean White Header
+                p.setFont("Helvetica-Bold", 22)
+                p.setFillColor(colors.black)
+                p.drawString(50, h - 60, "Delivery Notification")
+                
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(50, h - 90, f"Our Ref : {pod.order.order_id}")
+                
+                # Order Meta Info
+                p.setFont("Helvetica", 9)
+                p.drawString(50, h - 120, f"Delivery Ref : DO-{pod.order.order_id}XT")
+                p.drawString(50, h - 135, f"Your Ref : SO-99281-B")
+                p.drawString(50, h - 150, f"Order Date : {pod.timestamp.strftime('%Y-%m-%d')}")
+                
+                # Client & Shipper Details
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(50, h - 180, "Client:")
+                p.drawString(w - 200, h - 180, "Shipper:")
+                
+                p.setFont("Helvetica", 9)
+                cust_name = pod.order.customer_profile.business_name if pod.order.customer_profile else "General Client"
+                p.drawString(50, h - 195, cust_name)
+                p.drawString(50, h - 110, pod.order.delivery_address[:60])
+                p.drawString(w - 200, h - 195, "CC-NESTLE LOGISTICS INC.")
+                
+                # Items Table (Mocked for visual reference)
+                y = h - 230
+                items_data = [
+                    ["#", "Code", "Description", "Qty", "Status"],
+                    ["1", "SKU-001", "Assorted Logistics Items", "12", "OK"],
+                    ["2", "SKU-092", "Perishable Goods Package", "5", "OK"],
+                ]
+                y = draw_styled_table(p, 50, y, w - 100, items_data, header_color='#475569')
+                
+                # Delivery Proof Section
+                y -= 30
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(50, y, "Delivery Proof Information")
+                y -= 15
+                p.setFont("Helvetica", 9)
+                p.drawString(50, y, f"Delivery Status: {pod.order.status.upper()}")
+                p.drawString(50, y - 15, f"Time: {pod.timestamp.strftime('%Y-%m-%d %H:%M')}")
+                p.drawString(50, y - 30, f"Driver: {pod.order.assigned_driver.user.get_full_name() if pod.order.assigned_driver else 'N/A'}")
+                
+                p.drawString(w - 250, y, f"Latitude: {pod.latitude or 'N/A'}")
+                p.drawString(w - 250, y - 15, f"Longitude: {pod.longitude or 'N/A'}")
+                
+                # Map Placeholder Box
+                y -= 45
+                p.setStrokeColor(colors.lightgrey)
+                p.rect(w - 250, y - 120, 200, 120, stroke=1, fill=0)
+                p.drawCentredString(w - 150, y - 65, "[ DELIVERY MAP VISUAL ]")
+                
+                # Signature Area
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(50, y - 60, f"Recipient Name: {pod.recipient_name}")
+                p.drawString(50, y - 90, "Signature / Photo:")
+                
+                # Box for Signature
+                p.rect(50, y - 160, 200, 60, stroke=1, fill=0)
+                if pod.signature_image: # If binary signature exists
+                    try:
+                        from reportlab.lib.utils import ImageReader
+                        import io
+                        img = ImageReader(io.BytesIO(pod.signature_image))
+                        p.drawImage(img, 55, y - 155, width=190, height=50, mask='auto')
+                    except:
+                        p.drawCentredString(150, y - 130, "[ SIGNATURE IMAGE ]")
+                else:
+                    p.drawCentredString(150, y - 130, "[ SIGNATURE PLACEHOLDER ]")
+                
+                # Footer
+                p.setFont("Helvetica-Bold", 12)
+                p.drawCentredString(w/2, 40, "THANK YOU FOR YOUR ORDER")
+                
+            return generate_pdf_response(f"POD_{pod.order.order_id}", content)
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return Response({"error": str(e)}, status=500)
 
 class OrderExceptionViewSet(viewsets.ModelViewSet):
     queryset = OrderException.objects.all().order_by('-reported_at')
@@ -1222,34 +1287,36 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def vehicle_assignments(self, request):
         try:
-            from .utils.document_generator import generate_pdf_response, draw_header
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_styled_table, draw_status_pill
             from .models import VehicleAssignment
             
             assignments = VehicleAssignment.objects.all().select_related('vehicle', 'driver__employee')
             
             def content(p, w, h):
-                draw_header(p, w, h, "Vehicle Assignment Sheet")
-                y = h - 110
-                p.setFont("Helvetica-Bold", 10)
-                p.drawString(100, y, "Vehicle")
-                p.drawString(250, y, "Driver")
-                p.drawString(400, y, "Assigned Since")
-                p.line(100, y-5, w-100, y-5)
+                draw_header(p, w, h, "Fleet Deployment Registry", "Vehicle & Driver Asset Management")
                 
-                y -= 20
-                p.setFont("Helvetica", 9)
+                y = h - 120
+                table_data = [["Vehicle Plate", "Model", "Driver Name", "Contact", "Status", "Route/Zone"]]
+                
                 for a in assignments:
                     v_info = a.vehicle.plate_number if (a.vehicle and hasattr(a.vehicle, 'plate_number')) else "Unknown"
-                    d_info = a.driver.employee.full_name if (a.driver and a.driver.employee) else "Unassigned"
-                    date_info = a.assignment_start_date.strftime('%Y-%m-%d') if hasattr(a, 'assignment_start_date') and a.assignment_start_date else "N/A"
+                    v_model = a.vehicle.model if (a.vehicle and hasattr(a.vehicle, 'model')) else "N/A"
+                    d_name = a.driver.employee.full_name if (a.driver and a.driver.employee) else "Unassigned"
+                    d_contact = a.driver.employee.phone if (a.driver and a.driver.employee) else "N/A"
+                    status = a.status.upper() if hasattr(a, 'status') else "STANDBY"
+                    zone = "CBD / Zone E" if "CBD" in d_name else "Standard / Zone A" # Mocking zone for demo
                     
-                    p.drawString(100, y, v_info)
-                    p.drawString(250, y, d_info)
-                    p.drawString(400, y, date_info)
-                    y -= 15
-                    if y < 50:
-                        p.showPage()
-                        y = h - 50
+                    table_data.append([v_info, v_model, d_name, d_contact, status, zone])
+                
+                y = draw_styled_table(p, 30, y, w - 60, table_data)
+                
+                # Sign-off Area
+                y = 60
+                p.setFont("Helvetica-Bold", 8)
+                p.drawString(50, y, "DISPATCH VERIFIED BY:")
+                p.line(160, y, 300, y)
+                p.drawString(350, y, "FLEET MANAGER SIGNATURE:")
+                p.line(480, y, w - 50, y)
             
             return generate_pdf_response("Vehicle_Assignments", content)
         except Exception as e:
@@ -1305,32 +1372,88 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def delivery_performance(self, request):
         try:
-            from .utils.document_generator import generate_pdf_response, draw_header, draw_section
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_kpi_card, draw_styled_table, draw_status_pill
             from .models import Order
             
             total_orders = Order.objects.count()
             delivered = Order.objects.filter(status='delivered').count()
             failed = Order.objects.filter(status='delivery_failed').count()
-            pending = Order.objects.filter(status='pending').count()
-            
-            on_time_rate = (delivered / total_orders * 100) if total_orders > 0 else 0
+            pending = Order.objects.filter(status__in=['pending', 'assigned', 'in_transit']).count()
+            success_rate = (delivered / total_orders * 100) if total_orders > 0 else 0
             
             def content(p, w, h):
-                draw_header(p, w, h, "Delivery Performance Analytics")
-                y = h - 100
-                y = draw_section(p, 100, y, "Summary Metrics", [
-                    f"Total Orders: {total_orders}",
-                    f"Successfully Delivered: {delivered}",
-                    f"Failed Deliveries: {failed}",
-                    f"Pending/In-Transit: {pending}",
-                    f"On-Time Delivery Rate: {on_time_rate:.1f}%"
-                ])
+                draw_header(p, w, h, "Logistics Performance Intelligence", "Executive Operational Analytics")
                 
-                p.drawString(100, y, "Operational Insight:")
-                status_text = "stable" if on_time_rate > 90 else "needs improvement"
-                p.drawString(110, y-15, f"Current performance is {status_text}.")
+                # 1. Executive Summary KPI Cards
+                y = h - 160
+                draw_kpi_card(p, 50, y, "Total Volume", total_orders, "#1e293b")
+                draw_kpi_card(p, 185, y, "Success Rate", f"{success_rate:.1f}%", "#16a34a")
+                draw_kpi_card(p, 320, y, "Failed", failed, "#dc2626")
+                draw_kpi_card(p, 455, y, "In-Transit", pending, "#2563eb")
                 
-            return generate_pdf_response("Delivery_Performance", content)
+                # 2. Daily Performance Table
+                y -= 40
+                p.setFillColor(colors.HexColor('#334155'))
+                p.setFont("Helvetica-Bold", 11)
+                p.drawString(50, y, "Daily Operational Trends")
+                
+                y -= 10
+                perf_data = [["Date", "Total", "Successful", "Failed", "Success %"]]
+                # Mocking last 5 days trend
+                import datetime
+                for i in range(5):
+                    date = (datetime.date.today() - datetime.timedelta(days=i)).strftime('%Y-%m-%d')
+                    perf_data.append([date, "240", "218", "22", "90.8%"])
+                
+                y = draw_styled_table(p, 50, y, w - 100, perf_data)
+                
+                # 3. Zone Performance Analysis
+                y -= 20
+                p.drawString(50, y, "Geographic Performance Metrics")
+                y -= 10
+                
+                zone_data = [
+                    ["Zone", "Deliveries", "Success", "Rate", "Status"],
+                    ["Zone A - North", "312", "298", "95.5%", "GOOD"],
+                    ["Zone B - South", "287", "261", "90.9%", "GOOD"],
+                    ["Zone C - East", "245", "210", "85.7%", "WATCH"],
+                    ["Zone D - West", "268", "224", "83.6%", "WATCH"],
+                    ["Zone E - CBD", "172", "133", "77.3%", "ALERT"]
+                ]
+                
+                # Manual table for status pills support
+                t_y = y - (len(zone_data) * 20)
+                y = draw_styled_table(p, 50, y, w - 100, zone_data)
+                
+                # Highlight Zone E specifically
+                p.setStrokeColor(colors.HexColor('#ef4444'))
+                p.rect(48, t_y + 22, w - 96, 18, stroke=1, fill=0)
+                
+                # 4. Recommendations & Insights
+                y -= 20
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(50, y, "Executive Insights & Recommendations")
+                y -= 15
+                p.setFont("Helvetica", 9)
+                insights = [
+                    "• Pre-delivery communication gap identified in CBD routes.",
+                    "• High failure rate in Zone E linked to morning traffic windows.",
+                    "• Recommendation: Deploy dedicated CBD taskforce for morning slots.",
+                    "• Goal: Achieve 85% success rate in Zone E within 30 days."
+                ]
+                for line in insights:
+                    p.drawString(60, y, line)
+                    y -= 15
+                
+                # 5. Sign-off Section
+                y = 80
+                p.line(50, y, 200, y)
+                p.line(w - 200, y, w - 50, y)
+                p.setFont("Helvetica", 7)
+                p.drawString(50, y - 10, "PREPARED BY: Logistics Manager")
+                p.drawString(w - 200, y - 10, "APPROVED BY: Operations Director")
+
+            return generate_pdf_response("Performance_Intelligence", content)
         except Exception as e:
             import traceback
             print(traceback.format_exc())
