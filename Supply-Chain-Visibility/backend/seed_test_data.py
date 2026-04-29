@@ -173,16 +173,24 @@ def seed_data(orders_count_target, vehicles_count_target, drivers_count_target, 
         )
     print(f"Created {assignment_count} Vehicle Assignments")
 
-    # 7. Update some Orders and add Exceptions
-    from api.models import OrderException
+    # 7. Update some Orders and add Exceptions/PODs
+    from api.models import OrderException, ProofOfDelivery
     all_orders = list(Order.objects.all())
     random.shuffle(all_orders)
     
-    # Mark 60% as delivered
+    # Mark 60% as delivered and create PODs
     delivered_count = int(len(all_orders) * 0.6)
     for o in all_orders[:delivered_count]:
         o.status = 'delivered'
         o.save()
+        ProofOfDelivery.objects.create(
+            order=o,
+            recipient_name=f"Customer {random.randint(1, 100)}",
+            signature_image_url="https://via.placeholder.com/200x100?text=Signature",
+            latitude=o.delivery_lat,
+            longitude=o.delivery_lng
+        )
+    print(f"Created {delivered_count} Proof of Delivery (POD) entries")
         
     # Mark 15% as failed and create exceptions
     failed_count = int(len(all_orders) * 0.15)
