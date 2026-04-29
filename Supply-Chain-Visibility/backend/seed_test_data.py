@@ -229,8 +229,8 @@ def seed_data(orders_count_target, vehicles_count_target, drivers_count_target, 
     
     # Ensure warehouses exist
     if Warehouse.objects.count() < 2:
-        Warehouse.objects.get_or_create(name="Main Hub NYC", defaults={'address': '101 Port Way, NJ', 'capacity_m3': 50000})
-        Warehouse.objects.get_or_create(name="Regional Center CHI", defaults={'address': '500 Logistics Dr, IL', 'capacity_m3': 30000})
+        Warehouse.objects.get_or_create(name="Main Hub NYC", defaults={'address': '101 Port Way, NJ'})
+        Warehouse.objects.get_or_create(name="Regional Center CHI", defaults={'address': '500 Logistics Dr, IL'})
     
     all_wh = list(Warehouse.objects.all())
     if len(all_wh) >= 2:
