@@ -1273,7 +1273,7 @@ class ProofOfDeliveryViewSet(viewsets.ModelViewSet):
                 # Clean White Header
                 p.setFont("Helvetica-Bold", 22)
                 p.setFillColor(colors.black)
-                p.drawString(50, h - 60, "Delivery Notification")
+                p.drawString(50, h - 60, "Proof of Delivery")
                 
                 # Draw Logo on the right
                 draw_logo(p, w - 110, h - 80, size=60)
@@ -1334,17 +1334,10 @@ class ProofOfDeliveryViewSet(viewsets.ModelViewSet):
                 p.rect(w - 250, y - 120, 200, 120, stroke=1, fill=0)
                 p.drawCentredString(w - 150, y - 65, "[ DELIVERY MAP VISUAL ]")
                 
-                # Signature Area
+                # Signature Area Removed as per user request
                 p.setFont("Helvetica-Bold", 10)
                 p.drawString(50, y - 60, f"Recipient Name: {pod.recipient_name}")
-                p.drawString(50, y - 90, "Signature / Photo:")
-                
-                # Box for Signature
-                p.rect(50, y - 160, 200, 60, stroke=1, fill=0)
-                if pod.signature_image_url: # Fixed field name
-                    p.drawCentredString(150, y - 130, "[ SIGNATURE IMAGE ]")
-                else:
-                    p.drawCentredString(150, y - 130, "[ SIGNATURE PLACEHOLDER ]")
+                p.drawString(50, y - 90, "Status: Verified & Completed")
                 
                 # Footer
                 p.setFont("Helvetica-Bold", 12)
@@ -1644,6 +1637,40 @@ class ReportViewSet(viewsets.ViewSet):
             
         except Driver.DoesNotExist:
             return Response({"error": "Driver not found"}, status=404)
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return Response({"error": str(e)}, status=500)
+
+    @action(detail=False, methods=['get'])
+    def stock_transfers(self, request):
+        try:
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_styled_table
+            from warehouses.models import StockTransfer
+            
+            transfers = StockTransfer.objects.all().order_by('-created_at')
+            
+            def content(p, w, h):
+                draw_header(p, w, h, "Stock Transfer Log", "Warehouse Inventory Movement Report")
+                
+                y = h - 120
+                table_data = [["Item", "From Warehouse", "To Warehouse", "Qty", "Status", "Date"]]
+                
+                for t in transfers:
+                    src = t.source_warehouse.name[:20] if t.source_warehouse else "N/A"
+                    dst = t.destination_warehouse.name[:20] if t.destination_warehouse else "N/A"
+                    table_data.append([
+                        t.item_name[:20],
+                        src,
+                        dst,
+                        str(t.quantity),
+                        t.status.upper(),
+                        t.created_at.strftime('%Y-%m-%d')
+                    ])
+                
+                draw_styled_table(p, 30, y, w - 60, table_data)
+            
+            return generate_pdf_response("Stock_Transfers", content)
         except Exception as e:
             import traceback
             print(traceback.format_exc())
