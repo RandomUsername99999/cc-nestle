@@ -4,6 +4,7 @@ import random
 import argparse
 from decimal import Decimal
 from datetime import date, timedelta
+from django.utils import timezone
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "server.settings")
 django.setup()
@@ -197,13 +198,59 @@ def seed_data(orders_count_target, vehicles_count_target, drivers_count_target, 
             notes="Automated test exception for report validation."
         )
     
-    # Mark 10% as in_transit
-    transit_count = int(len(all_orders) * 0.1)
-    for o in all_orders[delivered_count+failed_count:delivered_count+failed_count+transit_count]:
-        o.status = 'in_transit'
-        o.save()
+    # 8. Create Trip Logs (Operations Feed & Driver Logs)
+    from drivers.models import TripLog
+    for i in range(20):
+        d = random.choice(drivers)
+        v = random.choice(vehicles)
+        start = timezone.now() - timedelta(days=random.randint(0, 7), hours=random.randint(1, 12))
+        TripLog.objects.create(
+            driver=d,
+            vehicle=v,
+            start_time=start,
+            end_time=start + timedelta(hours=random.randint(2, 8)),
+            start_mileage=random.randint(10000, 50000),
+            end_mileage=random.randint(50100, 60000),
+            fuel_consumed=Decimal(random.uniform(10.0, 50.0)),
+            route_data={"summary": "Automated test route through metro area."}
+        )
+    print("Created 20 Driver Trip Logs")
 
-    print(f"Updated orders: {delivered_count} Delivered, {failed_count} Failed with Exceptions, {transit_count} In Transit")
+    # 9. Create Stock Transfers (Warehouse Movement)
+    from warehouses.models import StockTransfer, Warehouse
+    
+    # Ensure warehouses exist
+    if Warehouse.objects.count() < 2:
+        Warehouse.objects.get_or_create(name="Main Hub NYC", defaults={'address': '101 Port Way, NJ', 'capacity_m3': 50000})
+        Warehouse.objects.get_or_create(name="Regional Center CHI", defaults={'address': '500 Logistics Dr, IL', 'capacity_m3': 30000})
+    
+    all_wh = list(Warehouse.objects.all())
+    if len(all_wh) >= 2:
+        for i in range(10):
+            StockTransfer.objects.create(
+                item_name=random.choice(['Nestle Milo 1kg', 'Maggi Noodles Pack', 'Nescafe Classic', 'KitKat Share Bag']),
+                quantity=random.randint(50, 500),
+                source_warehouse=all_wh[0],
+                destination_warehouse=all_wh[1],
+                status=random.choice(['pending', 'in_transit', 'completed']),
+                remarks="Monthly replenishment"
+            )
+        print("Created 10 Stock Transfers")
+
+    # 10. Create Inbound Radar (Procurement)
+    from inbound.models import InboundProcurement
+    suppliers = ['Global Foods Inc.', 'Nestle Manufacturing', 'Daily Fresh Supplies', 'Apex Logistics']
+    for i in range(12):
+        InboundProcurement.objects.create(
+            supplier_name=random.choice(suppliers),
+            item_details=f"Bulk shipment of {random.choice(['Raw Materials', 'Finished Goods', 'Packaging'])}",
+            quantity=random.randint(100, 1000),
+            expected_delivery=date.today() + timedelta(days=random.randint(1, 10)),
+            status=random.choice(['pending', 'shipped', 'received']),
+            tracking_number=f"INB-{random.randint(10000, 99999)}"
+        )
+    print("Created 12 Inbound Radar Entries")
+
     print("Data Seeding Completed Successfully!")
 
 if __name__ == "__main__":
