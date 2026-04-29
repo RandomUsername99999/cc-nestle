@@ -1363,9 +1363,9 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def delivery_performance(self, request):
         try:
-            from .utils.document_generator import generate_pdf_response, draw_header, draw_kpi_card, draw_styled_table, draw_status_pill
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_kpi_card, draw_styled_table, draw_bar_chart, draw_pie_chart
             from reportlab.lib import colors
-            from .models import Order
+            from .models import Order, OrderException
             
             total_orders = Order.objects.count()
             delivered = Order.objects.filter(status='delivered').count()
@@ -1373,34 +1373,36 @@ class ReportViewSet(viewsets.ViewSet):
             pending = Order.objects.filter(status__in=['pending', 'assigned', 'in_transit']).count()
             success_rate = (delivered / total_orders * 100) if total_orders > 0 else 0
             
+            # Aggregate failure reasons for Pie Chart
+            from django.db.models import Count
+            failure_reasons = OrderException.objects.values('exception_type').annotate(count=Count('exception_id'))
+            pie_data = [r['count'] for r in failure_reasons] or [1]
+            pie_labels = [r['exception_type'].replace('_', ' ').title() for r in failure_reasons] or ["No Exceptions"]
+
             def content(p, w, h):
                 draw_header(p, w, h, "Logistics Performance Intelligence", "Executive Operational Analytics")
                 
                 # 1. Executive Summary KPI Cards
-                y = h - 160
+                y = h - 180
                 draw_kpi_card(p, 50, y, "Total Volume", total_orders, "#1e293b")
                 draw_kpi_card(p, 185, y, "Success Rate", f"{success_rate:.1f}%", "#16a34a")
-                draw_kpi_card(p, 320, y, "Failed", failed, "#dc2626")
-                draw_kpi_card(p, 455, y, "In-Transit", pending, "#2563eb")
+                draw_kpi_card(p, 320, y, "Exceptions", failed, "#dc2626")
+                draw_kpi_card(p, 455, y, "Active Fleet", pending, "#2563eb")
                 
-                # 2. Daily Performance Table
-                y -= 40
-                p.setFillColor(colors.HexColor('#334155'))
-                p.setFont("Helvetica-Bold", 11)
-                p.drawString(50, y, "Daily Operational Trends")
+                # 2. Charts Section
+                y -= 180
+                # Bar Chart for Trends (Successful vs Failed)
+                bar_data = [[150, 170, 160, 180, 190, 140, 90], [10, 15, 12, 18, 14, 20, 10]] # Mocked trends
+                bar_labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                draw_bar_chart(p, 50, y, 280, 150, bar_data, bar_labels, "Weekly Delivery Volume")
                 
-                y -= 10
-                perf_data = [["Date", "Total", "Successful", "Failed", "Success %"]]
-                # Mocking last 5 days trend
-                import datetime
-                for i in range(5):
-                    date = (datetime.date.today() - datetime.timedelta(days=i)).strftime('%Y-%m-%d')
-                    perf_data.append([date, "240", "218", "22", "90.8%"])
-                
-                y = draw_styled_table(p, 50, y, w - 100, perf_data)
+                # Pie Chart for Exceptions
+                draw_pie_chart(p, 350, y, 200, 150, pie_data, pie_labels, "Failure Root Causes")
                 
                 # 3. Zone Performance Analysis
-                y -= 20
+                y -= 40
+                p.setFont("Helvetica-Bold", 11)
+                p.setFillColor(colors.HexColor('#1e293b'))
                 p.drawString(50, y, "Geographic Performance Metrics")
                 y -= 10
                 
@@ -1413,43 +1415,23 @@ class ReportViewSet(viewsets.ViewSet):
                     ["Zone E - CBD", "172", "133", "77.3%", "ALERT"]
                 ]
                 
-                # Manual table for status pills support
-                t_y = y - (len(zone_data) * 20)
+                t_y = y
                 y = draw_styled_table(p, 50, y, w - 100, zone_data)
                 
-                # Highlight Zone E specifically
-                p.setStrokeColor(colors.HexColor('#ef4444'))
-                p.rect(48, t_y + 22, w - 96, 18, stroke=1, fill=0)
-                
-                # 4. Recommendations & Insights
-                y -= 20
-                p.setFont("Helvetica-Bold", 10)
-                p.drawString(50, y, "Executive Insights & Recommendations")
-                y -= 15
-                p.setFont("Helvetica", 9)
-                insights = [
-                    "• Pre-delivery communication gap identified in CBD routes.",
-                    "• High failure rate in Zone E linked to morning traffic windows.",
-                    "• Recommendation: Deploy dedicated CBD taskforce for morning slots.",
-                    "• Goal: Achieve 85% success rate in Zone E within 30 days."
-                ]
-                for line in insights:
-                    p.drawString(60, y, line)
-                    y -= 15
-                
-                # 5. Sign-off Section
+                # 4. Sign-off Section
                 y = 80
                 p.line(50, y, 200, y)
                 p.line(w - 200, y, w - 50, y)
                 p.setFont("Helvetica", 7)
-                p.drawString(50, y - 10, "PREPARED BY: Logistics Manager")
-                p.drawString(w - 200, y - 10, "APPROVED BY: Operations Director")
+                p.drawString(50, y - 10, "PREPARED BY: AI Analytics Engine")
+                p.drawString(w - 200, y - 10, "VALIDATED BY: Operations Director")
 
             return generate_pdf_response("Performance_Intelligence", content)
         except Exception as e:
             import traceback
             print(traceback.format_exc())
             return Response({"error": str(e)}, status=500)
+
 
     @action(detail=False, methods=['get'])
     def failed_deliveries(self, request):
@@ -1484,36 +1466,104 @@ class ReportViewSet(viewsets.ViewSet):
             return Response({"error": str(e)}, status=500)
 
     @action(detail=False, methods=['get'])
-    def stock_transfers(self, request):
-        try:
-            from .utils.document_generator import generate_pdf_response, draw_header, draw_styled_table
-            from warehouses.models import StockTransfer
+    def driver_manifest(self, request):
+        """ Generate a professional individual manifest for a specific driver. """
+        driver_id = request.query_params.get('driver_id')
+        if not driver_id:
+            return Response({"error": "driver_id query parameter is required"}, status=400)
             
-            transfers = StockTransfer.objects.all().order_by('-created_at')
+        try:
+            from drivers.models import Driver, TripLog
+            from .models import Order, Shipment, ShipmentOrder
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_kpi_card, draw_styled_table, draw_status_pill
+            from reportlab.lib import colors
+            
+            driver = Driver.objects.get(driver_id=driver_id)
+            active_shipments = Shipment.objects.filter(driver=driver).order_by('-created_at')[:5]
+            
+            # Stats for driver
+            total_trips = TripLog.objects.filter(driver=driver).count()
+            total_deliveries = Order.objects.filter(assigned_driver=driver, status='delivered').count()
+            pending_tasks = Order.objects.filter(assigned_driver=driver, status__in=['pending', 'assigned', 'in_transit']).count()
             
             def content(p, w, h):
-                draw_header(p, w, h, "Stock Transfer Log", "Warehouse Inventory Movement Report")
+                draw_header(p, w, h, f"Driver Assignment Registry", f"Personnel: {driver.employee.full_name} | ID: DRV-{driver.driver_id}")
                 
-                y = h - 120
-                table_data = [["Item", "From Warehouse", "To Warehouse", "Qty", "Status", "Date"]]
+                # 1. Driver Summary KPIs
+                y = h - 180
+                draw_kpi_card(p, 50, y, "Completed Trips", total_trips, "#1e293b")
+                draw_kpi_card(p, 185, y, "Total Deliveries", total_deliveries, "#16a34a")
+                draw_kpi_card(p, 320, y, "Pending Tasks", pending_tasks, "#f59e0b")
+                draw_kpi_card(p, 455, y, "Exp (Years)", driver.experience_years, "#3b82f6")
                 
-                for t in transfers:
-                    src = t.source_warehouse.name[:20] if t.source_warehouse else "N/A"
-                    dst = t.destination_warehouse.name[:20] if t.destination_warehouse else "N/A"
+                # 2. Assignment Details
+                y -= 40
+                p.setFont("Helvetica-Bold", 12)
+                p.setFillColor(colors.HexColor('#1e293b'))
+                p.drawString(50, y, "Recent Manifest Assignments")
+                y -= 15
+                
+                table_data = [["Manifest ID", "Created At", "Status", "Items", "Type"]]
+                for s in active_shipments:
+                    item_count = ShipmentOrder.objects.filter(shipment=s).count()
                     table_data.append([
-                        t.item_name[:20],
-                        src,
-                        dst,
-                        str(t.quantity),
-                        t.status.upper(),
-                        t.created_at.strftime('%Y-%m-%d')
+                        f"MF-{s.shipment_id}",
+                        s.created_at.strftime('%Y-%m-%d %H:%M'),
+                        s.status.upper(),
+                        str(item_count),
+                        s.shipment_type.title()
                     ])
                 
-                draw_styled_table(p, 30, y, w - 60, table_data)
+                if len(table_data) == 1:
+                    table_data.append(["N/A", "No recent assignments", "-", "-", "-"])
+                
+                y = draw_styled_table(p, 50, y, w - 100, table_data)
+                
+                # 3. Active Orders / Tasks
+                y -= 20
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(50, y, "Detailed Task List (Active/Pending)")
+                y -= 15
+                
+                order_data = [["Order ID", "Destination Address", "Qty", "Weight", "Status"]]
+                active_orders = Order.objects.filter(assigned_driver=driver).exclude(status__in=['delivered', 'cancelled']).order_by('-created_at')[:10]
+                
+                for o in active_orders:
+                    order_data.append([
+                        f"ORD-{o.order_id}",
+                        o.delivery_address[:40] + "..." if len(o.delivery_address) > 40 else o.delivery_address,
+                        str(o.quantity),
+                        f"{o.weight_kg}kg",
+                        o.status.upper()
+                    ])
+                
+                if len(order_data) == 1:
+                    order_data.append(["N/A", "No active tasks found", "-", "-", "-"])
+                
+                y = draw_styled_table(p, 50, y, w - 100, order_data, header_color='#475569')
+                
+                # 4. Emergency & Compliance
+                y -= 20
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(50, y, "Compliance & Support Information")
+                y -= 15
+                p.setFont("Helvetica", 9)
+                p.drawString(50, y, f"License Number: {driver.license_number} (Exp: {driver.license_expiry_date})")
+                p.drawString(50, y - 15, f"Emergency Contact: {driver.employee.emergency_contact_name} ({driver.employee.emergency_contact_number})")
+                p.drawString(w - 250, y, "Dispatcher Hotline: +94 11 222 3333")
+                p.drawString(w - 250, y - 15, "Security / SOS: *999#")
+                
+                # Footer
+                p.setFont("Helvetica-Oblique", 7)
+                p.drawCentredString(w/2, 30, "This document is an official assignment. Drivers must keep a copy during transit.")
+
+            return generate_pdf_response(f"Driver_Manifest_{driver_id}", content)
             
-            return generate_pdf_response("Stock_Transfers", content)
+        except Driver.DoesNotExist:
+            return Response({"error": "Driver not found"}, status=404)
         except Exception as e:
             import traceback
             print(traceback.format_exc())
             return Response({"error": str(e)}, status=500)
+
 
