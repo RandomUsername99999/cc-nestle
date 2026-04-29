@@ -240,8 +240,7 @@ def seed_data(orders_count_target, vehicles_count_target, drivers_count_target, 
                 quantity=random.randint(50, 500),
                 source_warehouse=all_wh[0],
                 destination_warehouse=all_wh[1],
-                status=random.choice(['pending', 'in_transit', 'completed']),
-                remarks="Monthly replenishment"
+                status=random.choice(['pending', 'in_transit', 'completed'])
             )
         print("Created 10 Stock Transfers")
 
