@@ -29,6 +29,21 @@ def generate_pdf_response(filename, content_callback):
     response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
     return response
 
+def draw_logo(p, x, y, size=40):
+    """ Draw the Nestle logo if available, fallback to text logo. """
+    import os
+    # Use a reliable path relative to the workspace
+    logo_path = r"c:\ccProject\Supply-Chain-Visibility\public\logo192.png"
+    if os.path.exists(logo_path):
+        p.drawImage(logo_path, x, y, width=size, height=size, mask='auto')
+    else:
+        # Fallback stylized text logo
+        p.setFillColor(colors.HexColor('#3b82f6'))
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(x, y + 15, "CC")
+        p.setFillColor(colors.whitesmoke)
+        p.drawString(x + 20, y + 15, "NESTLE")
+
 def draw_header(p, width, height, title, subtitle="Logistics Management System"):
     # Modern Gradient-like Header Bar
     p.setFillColor(colors.HexColor('#1e293b')) # Dark slate 800
@@ -38,13 +53,16 @@ def draw_header(p, width, height, title, subtitle="Logistics Management System")
     p.setFillColor(colors.HexColor('#3b82f6')) # Blue 500
     p.rect(0, height - 102, width, 2, stroke=0, fill=1)
     
+    # Draw Logo
+    draw_logo(p, 50, height - 60, size=45)
+    
     p.setFillColor(colors.whitesmoke)
     p.setFont("Helvetica-Bold", 22)
-    p.drawString(50, height - 50, title.upper())
+    p.drawString(110, height - 50, title.upper())
     
     p.setFont("Helvetica", 10)
     p.setFillColor(colors.HexColor('#94a3b8')) # Slate 400
-    p.drawString(50, height - 70, subtitle)
+    p.drawString(110, height - 70, subtitle)
     
     p.setFillColor(colors.whitesmoke)
     p.setFont("Helvetica-Bold", 9)
