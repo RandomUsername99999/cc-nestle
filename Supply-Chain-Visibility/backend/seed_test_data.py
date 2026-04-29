@@ -220,7 +220,7 @@ def seed_data(orders_count_target, vehicles_count_target, drivers_count_target, 
             start_mileage=random.randint(10000, 50000),
             end_mileage=random.randint(50100, 60000),
             fuel_consumed=Decimal(random.uniform(10.0, 50.0)),
-            route_data={"summary": "Automated test route through metro area."}
+            notes="Automated test route through metro area."
         )
     print("Created 20 Driver Trip Logs")
 
@@ -245,19 +245,31 @@ def seed_data(orders_count_target, vehicles_count_target, drivers_count_target, 
             )
         print("Created 10 Stock Transfers")
 
-    # 10. Create Inbound Radar (Procurement)
-    from inbound.models import InboundProcurement
-    suppliers = ['Global Foods Inc.', 'Nestle Manufacturing', 'Daily Fresh Supplies', 'Apex Logistics']
-    for i in range(12):
-        InboundProcurement.objects.create(
-            supplier_name=random.choice(suppliers),
-            item_details=f"Bulk shipment of {random.choice(['Raw Materials', 'Finished Goods', 'Packaging'])}",
-            quantity=random.randint(100, 1000),
-            expected_delivery=date.today() + timedelta(days=random.randint(1, 10)),
-            status=random.choice(['pending', 'shipped', 'received']),
-            tracking_number=f"INB-{random.randint(10000, 99999)}"
+    # 10. Create Inbound Radar (Supplier Manifests)
+    from inbound.models import Supplier, SupplierDeliveryManifest
+    supplier_names = ['Global Foods Inc.', 'Nestle Manufacturing', 'Daily Fresh Supplies', 'Apex Logistics']
+    for name in supplier_names:
+        Supplier.objects.get_or_create(
+            name=name,
+            defaults={
+                'address': f"{random.randint(10, 500)} Industrial Way",
+                'lat': Decimal(random.uniform(-90, 90)),
+                'lng': Decimal(random.uniform(-180, 180)),
+                'qr_token': f"TOKEN-{random.randint(1000, 9999)}"
+            }
         )
-    print("Created 12 Inbound Radar Entries")
+    
+    all_suppliers = list(Supplier.objects.all())
+    for i in range(12):
+        SupplierDeliveryManifest.objects.create(
+            manifest_reference=f"MNF-{random.randint(10000, 99999)}",
+            supplier=random.choice(all_suppliers),
+            status=random.choice(['received', 'planned', 'assigned', 'in_transit', 'delivered']),
+            expected_collection=timezone.now() + timedelta(days=random.randint(1, 10)),
+            total_weight_kg=Decimal(random.uniform(100, 5000)),
+            total_volume_m3=Decimal(random.uniform(1, 20))
+        )
+    print("Created 12 Inbound Supplier Manifests")
 
     print("Data Seeding Completed Successfully!")
 
