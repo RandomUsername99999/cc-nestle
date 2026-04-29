@@ -29,46 +29,59 @@ def generate_pdf_response(filename, content_callback):
     response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
     return response
 
-def draw_logo(p, x, y, size=40):
-    """ Draw the Nestle logo if available, fallback to text logo. """
+def draw_logo(p, x, y, size=50):
+    """ Draw the Nestle logo from local assets. """
     import os
-    # Use the correct path from mobile assets as specified
-    logo_path = r"c:\ccProject\Mobile-Interface\assets\images\logo.png"
+    # Path relative to this file
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    logo_path = os.path.join(base_dir, "..", "assets", "logo.png")
+    
     if os.path.exists(logo_path):
+        # Draw a subtle background for the logo to make it pop
+        p.setFillColor(colors.white)
+        p.roundRect(x - 5, y - 5, size + 10, size + 10, 8, stroke=0, fill=1)
         p.drawImage(logo_path, x, y, width=size, height=size, mask='auto')
     else:
         # Fallback stylized text logo
         p.setFillColor(colors.HexColor('#3b82f6'))
-        p.setFont("Helvetica-Bold", 14)
+        p.setFont("Helvetica-Bold", 16)
         p.drawString(x, y + 15, "CC")
         p.setFillColor(colors.whitesmoke)
-        p.drawString(x + 20, y + 15, "NESTLE")
+        p.drawString(x + 25, y + 15, "NESTLE")
 
 def draw_header(p, width, height, title, subtitle="Logistics Management System"):
-    # Modern Gradient-like Header Bar (Fixed height for better spacing)
-    p.setFillColor(colors.HexColor('#1e293b')) # Dark slate 800
+    # Modern Gradient-like Header Bar
+    p.setFillColor(colors.HexColor('#0f172a')) # Slate 900
     p.rect(0, height - 100, width, 100, stroke=0, fill=1)
     
-    # Accent Line
-    p.setFillColor(colors.HexColor('#3b82f6')) # Blue 500
-    p.rect(0, height - 102, width, 2, stroke=0, fill=1)
+    # Blue Accent Bar
+    p.setFillColor(colors.HexColor('#2563eb')) # Blue 600
+    p.rect(0, height - 105, width, 5, stroke=0, fill=1)
     
-    # Draw Logo (Adjusted position)
-    draw_logo(p, 40, height - 70, size=50)
+    # Draw Logo
+    draw_logo(p, 40, height - 80, size=60)
     
+    # Title - Limit width to prevent overlap
     p.setFillColor(colors.whitesmoke)
-    p.setFont("Helvetica-Bold", 20)
-    p.drawString(110, height - 50, title.upper())
+    p.setFont("Helvetica-Bold", 18)
+    # If title is too long, it will be truncated or we can use a smaller font
+    display_title = title.upper()
+    if len(display_title) > 25:
+        p.setFont("Helvetica-Bold", 14)
+    p.drawString(120, height - 55, display_title)
     
-    p.setFont("Helvetica", 9)
+    # Subtitle
+    p.setFont("Helvetica", 10)
     p.setFillColor(colors.HexColor('#94a3b8')) # Slate 400
-    p.drawString(110, height - 68, subtitle)
+    p.drawString(120, height - 72, subtitle)
     
+    # Metadata (Date/Ref) - Moved further right and styled
     p.setFillColor(colors.whitesmoke)
     p.setFont("Helvetica-Bold", 8)
-    p.drawString(width - 180, height - 45, f"REPORT DATE: {timezone.now().strftime('%d %b %Y')}")
+    p.drawRightString(width - 40, height - 45, f"REPORT DATE: {timezone.now().strftime('%d %b %Y')}")
     p.setFont("Helvetica", 8)
-    p.drawString(width - 180, height - 58, f"SYSTEM REF: {timezone.now().strftime('%H%M%S-%d%m')}")
+    p.setFillColor(colors.HexColor('#cbd5e1')) # Slate 300
+    p.drawRightString(width - 40, height - 60, f"SYSTEM REF: {timezone.now().strftime('%H%M%S-%d%m')}")
 
 
 def draw_kpi_card(p, x, y, label, value, color="#3b82f6"):

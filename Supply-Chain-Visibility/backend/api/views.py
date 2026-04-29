@@ -1269,7 +1269,14 @@ class ProofOfDeliveryViewSet(viewsets.ModelViewSet):
             from reportlab.lib import colors
             
             def content(p, w, h):
-                draw_header(p, w, h, "Delivery Notification", "Official Proof of Delivery (POD)")
+                from .utils.document_generator import draw_logo
+                # Clean White Header
+                p.setFont("Helvetica-Bold", 22)
+                p.setFillColor(colors.black)
+                p.drawString(50, h - 60, "Delivery Notification")
+                
+                # Draw Logo on the right
+                draw_logo(p, w - 110, h - 80, size=60)
                 
                 p.setFont("Helvetica-Bold", 12)
                 p.setFillColor(colors.black)
