@@ -129,13 +129,12 @@ def seed_data(orders_count_target, vehicles_count_target, drivers_count_target, 
     
     for _ in range(orders_count_target):
         hub = random.choice(hubs)
-        # Random variance for delivery (0.05 to 0.4 deg for wider regional coverage)
         lat_off = random.uniform(-0.35, 0.35)
         lng_off = random.uniform(-0.35, 0.35)
         
         weight = random.uniform(20.0, 5000.0)
         volume = random.uniform(0.1, 15.0)
-        refrig = random.choice([True, False, False, False, False]) # 20% refrig
+        refrig = random.choice([True, False, False, False, False])
         
         Order.objects.create(
             shipment_type=random.choice(['package', 'pallet', 'pallet', 'package']),
@@ -157,8 +156,54 @@ def seed_data(orders_count_target, vehicles_count_target, drivers_count_target, 
             status='pending'
         )
         orders_created += 1
-            
     print(f"Created {orders_created} Orders across {len(hubs)} geographic regions")
+
+    # 6. Create Assignments (Randomly link some vehicles and drivers)
+    assignment_count = min(len(vehicles), len(drivers))
+    random.shuffle(vehicles)
+    random.shuffle(drivers)
+    
+    for i in range(assignment_count):
+        VehicleAssignment.objects.create(
+            vehicle=vehicles[i],
+            driver=drivers[i],
+            status=random.choice(['active', 'active', 'active', 'standby']),
+            assignment_start_date=date.today() - timedelta(days=random.randint(1, 30))
+        )
+    print(f"Created {assignment_count} Vehicle Assignments")
+
+    # 7. Update some Orders and add Exceptions
+    from api.models import OrderException
+    all_orders = list(Order.objects.all())
+    random.shuffle(all_orders)
+    
+    # Mark 60% as delivered
+    delivered_count = int(len(all_orders) * 0.6)
+    for o in all_orders[:delivered_count]:
+        o.status = 'delivered'
+        o.save()
+        
+    # Mark 15% as failed and create exceptions
+    failed_count = int(len(all_orders) * 0.15)
+    for o in all_orders[delivered_count:delivered_count+failed_count]:
+        o.status = 'delivery_failed'
+        o.save()
+        OrderException.objects.create(
+            order=o,
+            exception_type=random.choice(['no_answer', 'address_not_found', 'refused', 'damaged']),
+            driver=random.choice(drivers),
+            location_lat=o.delivery_lat or 0,
+            location_lng=o.delivery_lng or 0,
+            notes="Automated test exception for report validation."
+        )
+    
+    # Mark 10% as in_transit
+    transit_count = int(len(all_orders) * 0.1)
+    for o in all_orders[delivered_count+failed_count:delivered_count+failed_count+transit_count]:
+        o.status = 'in_transit'
+        o.save()
+
+    print(f"Updated orders: {delivered_count} Delivered, {failed_count} Failed with Exceptions, {transit_count} In Transit")
     print("Data Seeding Completed Successfully!")
 
 if __name__ == "__main__":
