@@ -32,8 +32,8 @@ def generate_pdf_response(filename, content_callback):
 def draw_logo(p, x, y, size=40):
     """ Draw the Nestle logo if available, fallback to text logo. """
     import os
-    # Use a reliable path relative to the workspace
-    logo_path = r"c:\ccProject\Supply-Chain-Visibility\public\logo192.png"
+    # Use the correct path from mobile assets as specified
+    logo_path = r"c:\ccProject\Mobile-Interface\assets\images\logo.png"
     if os.path.exists(logo_path):
         p.drawImage(logo_path, x, y, width=size, height=size, mask='auto')
     else:
@@ -45,7 +45,7 @@ def draw_logo(p, x, y, size=40):
         p.drawString(x + 20, y + 15, "NESTLE")
 
 def draw_header(p, width, height, title, subtitle="Logistics Management System"):
-    # Modern Gradient-like Header Bar
+    # Modern Gradient-like Header Bar (Fixed height for better spacing)
     p.setFillColor(colors.HexColor('#1e293b')) # Dark slate 800
     p.rect(0, height - 100, width, 100, stroke=0, fill=1)
     
@@ -53,22 +53,23 @@ def draw_header(p, width, height, title, subtitle="Logistics Management System")
     p.setFillColor(colors.HexColor('#3b82f6')) # Blue 500
     p.rect(0, height - 102, width, 2, stroke=0, fill=1)
     
-    # Draw Logo
-    draw_logo(p, 50, height - 60, size=45)
+    # Draw Logo (Adjusted position)
+    draw_logo(p, 40, height - 70, size=50)
     
     p.setFillColor(colors.whitesmoke)
-    p.setFont("Helvetica-Bold", 22)
+    p.setFont("Helvetica-Bold", 20)
     p.drawString(110, height - 50, title.upper())
     
-    p.setFont("Helvetica", 10)
+    p.setFont("Helvetica", 9)
     p.setFillColor(colors.HexColor('#94a3b8')) # Slate 400
-    p.drawString(110, height - 70, subtitle)
+    p.drawString(110, height - 68, subtitle)
     
     p.setFillColor(colors.whitesmoke)
-    p.setFont("Helvetica-Bold", 9)
-    p.drawString(width - 200, height - 45, f"REPORT DATE: {timezone.now().strftime('%d %b %Y')}")
-    p.setFont("Helvetica", 9)
-    p.drawString(width - 200, height - 60, f"SYSTEM REF: {timezone.now().strftime('%H%M%S-%d%m')}")
+    p.setFont("Helvetica-Bold", 8)
+    p.drawString(width - 180, height - 45, f"REPORT DATE: {timezone.now().strftime('%d %b %Y')}")
+    p.setFont("Helvetica", 8)
+    p.drawString(width - 180, height - 58, f"SYSTEM REF: {timezone.now().strftime('%H%M%S-%d%m')}")
+
 
 def draw_kpi_card(p, x, y, label, value, color="#3b82f6"):
     # Shadow effect

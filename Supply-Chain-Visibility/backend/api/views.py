@@ -544,14 +544,15 @@ class OrderViewSet(viewsets.ModelViewSet):
                 draw_header(p, w, h, "Order Waybill", f"Official Documentation for Order ID: ORD-{order.order_id}")
                 
                 # 1. Order Summary KPIs
-                y = h - 180
+                y = h - 185
                 draw_kpi_card(p, 50, y, "Total Weight", f"{order.weight_kg} kg", "#1e293b")
                 draw_kpi_card(p, 185, y, "Volume", f"{order.volume_m3} m³", "#3b82f6")
                 draw_kpi_card(p, 320, y, "Quantity", f"{order.quantity} units", "#16a34a")
                 draw_kpi_card(p, 455, y, "Status", order.status.upper(), "#f59e0b" if order.status != 'delivered' else "#16a34a")
                 
                 # 2. Logistics & Routing Details
-                y -= 40
+                y -= 90 # Increased spacing
+
                 p.setFont("Helvetica-Bold", 12)
                 p.setFillColor(colors.HexColor('#1e293b'))
                 p.drawString(50, y, "Routing & Logistics Information")
@@ -1456,15 +1457,16 @@ class ReportViewSet(viewsets.ViewSet):
                 draw_header(p, w, h, "Logistics Performance Intelligence", "Executive Operational Analytics")
                 
                 # 1. Executive Summary KPI Cards
-                y = h - 180
+                y = h - 185
                 draw_kpi_card(p, 50, y, "Total Volume", total_orders, "#1e293b")
                 draw_kpi_card(p, 185, y, "Success Rate", f"{success_rate:.1f}%", "#16a34a")
                 draw_kpi_card(p, 320, y, "Exceptions", failed, "#dc2626")
                 draw_kpi_card(p, 455, y, "Active Fleet", pending, "#2563eb")
                 
                 # 2. Charts Section
-                y -= 180
+                y -= 210 # Increased spacing to prevent overlap
                 # Bar Chart for Trends (Successful vs Failed)
+
                 bar_data = [[150, 170, 160, 180, 190, 140, 90], [10, 15, 12, 18, 14, 20, 10]] # Mocked trends
                 bar_labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
                 draw_bar_chart(p, 50, y, 280, 150, bar_data, bar_labels, "Weekly Delivery Volume")
@@ -1563,14 +1565,15 @@ class ReportViewSet(viewsets.ViewSet):
                 draw_header(p, w, h, f"Driver Assignment Registry", f"Personnel: {driver.employee.full_name} | ID: DRV-{driver.driver_id}")
                 
                 # 1. Driver Summary KPIs
-                y = h - 180
+                y = h - 185
                 draw_kpi_card(p, 50, y, "Completed Trips", total_trips, "#1e293b")
                 draw_kpi_card(p, 185, y, "Total Deliveries", total_deliveries, "#16a34a")
                 draw_kpi_card(p, 320, y, "Pending Tasks", pending_tasks, "#f59e0b")
                 draw_kpi_card(p, 455, y, "Exp (Years)", driver.experience_years, "#3b82f6")
                 
                 # 2. Assignment Details
-                y -= 40
+                y -= 90 # Increased spacing
+
                 p.setFont("Helvetica-Bold", 12)
                 p.setFillColor(colors.HexColor('#1e293b'))
                 p.drawString(50, y, "Recent Manifest Assignments")
