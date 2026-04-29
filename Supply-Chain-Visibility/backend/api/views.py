@@ -1237,7 +1237,11 @@ class ProofOfDeliveryViewSet(viewsets.ModelViewSet):
                 p.setFont("Helvetica", 9)
                 p.drawString(50, y, f"Delivery Status: {pod.order.status.upper()}")
                 p.drawString(50, y - 15, f"Time: {pod.timestamp.strftime('%Y-%m-%d %H:%M')}")
-                p.drawString(50, y - 30, f"Driver: {pod.order.assigned_driver.user.get_full_name() if pod.order.assigned_driver else 'N/A'}")
+                # Use assigned_driver from the order if it exists
+                driver_name = "N/A"
+                if hasattr(pod.order, 'assigned_driver') and pod.order.assigned_driver:
+                    driver_name = pod.order.assigned_driver.user.get_full_name()
+                p.drawString(50, y - 30, f"Driver: {driver_name}")
                 
                 p.drawString(w - 250, y, f"Latitude: {pod.latitude or 'N/A'}")
                 p.drawString(w - 250, y - 15, f"Longitude: {pod.longitude or 'N/A'}")
@@ -1302,9 +1306,9 @@ class ReportViewSet(viewsets.ViewSet):
                     v_info = a.vehicle.plate_number if (a.vehicle and hasattr(a.vehicle, 'plate_number')) else "Unknown"
                     v_model = a.vehicle.model if (a.vehicle and hasattr(a.vehicle, 'model')) else "N/A"
                     d_name = a.driver.employee.full_name if (a.driver and a.driver.employee) else "Unassigned"
-                    d_contact = a.driver.employee.phone if (a.driver and a.driver.employee) else "N/A"
+                    d_contact = a.driver.employee.contact_number if (a.driver and a.driver.employee) else "N/A"
                     status = a.status.upper() if hasattr(a, 'status') else "STANDBY"
-                    zone = "CBD / Zone E" if "CBD" in d_name else "Standard / Zone A" # Mocking zone for demo
+                    zone = "CBD / Zone E" if "CBD" in d_name else "Standard / Zone A" 
                     
                     table_data.append([v_info, v_model, d_name, d_contact, status, zone])
                 
