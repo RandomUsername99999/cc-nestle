@@ -1215,9 +1215,10 @@ class ProofOfDeliveryViewSet(viewsets.ModelViewSet):
                 p.drawString(w - 200, h - 180, "Shipper:")
                 
                 p.setFont("Helvetica", 9)
-                cust_name = pod.order.customer_profile.business_name if pod.order.customer_profile else "General Client"
+                # Fallback since Order doesn't have a direct Customer link
+                cust_name = "General Client"
                 p.drawString(50, h - 195, cust_name)
-                p.drawString(50, h - 110, pod.order.delivery_address[:60])
+                p.drawString(50, h - 110, pod.order.delivery_address[:60] if pod.order.delivery_address else "No Address Provided")
                 p.drawString(w - 200, h - 195, "CC-NESTLE LOGISTICS INC.")
                 
                 # Items Table (Mocked for visual reference)
@@ -1259,14 +1260,8 @@ class ProofOfDeliveryViewSet(viewsets.ModelViewSet):
                 
                 # Box for Signature
                 p.rect(50, y - 160, 200, 60, stroke=1, fill=0)
-                if pod.signature_image: # If binary signature exists
-                    try:
-                        from reportlab.lib.utils import ImageReader
-                        import io
-                        img = ImageReader(io.BytesIO(pod.signature_image))
-                        p.drawImage(img, 55, y - 155, width=190, height=50, mask='auto')
-                    except:
-                        p.drawCentredString(150, y - 130, "[ SIGNATURE IMAGE ]")
+                if pod.signature_image_url: # Fixed field name
+                    p.drawCentredString(150, y - 130, "[ SIGNATURE IMAGE ]")
                 else:
                     p.drawCentredString(150, y - 130, "[ SIGNATURE PLACEHOLDER ]")
                 
@@ -1331,41 +1326,33 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def driver_trip_logs(self, request):
         try:
-            from .utils.document_generator import generate_pdf_response, draw_header
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_styled_table
             from drivers.models import TripLog
             
             logs = TripLog.objects.all().order_by('-start_time')
             
             def content(p, w, h):
-                draw_header(p, w, h, "Driver Trip Logs")
-                y = h - 110
-                p.setFont("Helvetica-Bold", 9)
-                p.drawString(50, y, "Date")
-                p.drawString(120, y, "Driver")
-                p.drawString(220, y, "Vehicle")
-                p.drawString(300, y, "Start")
-                p.drawString(380, y, "End")
-                p.drawString(450, y, "Mileage")
-                p.drawString(520, y, "Fuel")
-                p.line(50, y-5, w-50, y-5)
+                draw_header(p, w, h, "Fleet Activity Logs", "Daily Driver Trip & Fuel Tracking")
                 
-                y -= 20
-                p.setFont("Helvetica", 8)
+                y = h - 120
+                table_data = [["Date", "Driver", "Vehicle", "Start", "End", "Mileage", "Fuel"]]
+                
                 for l in logs:
                     d_name = l.driver.employee.full_name[:20] if (l.driver and l.driver.employee) else "Unknown"
                     v_plate = l.vehicle.plate_number if l.vehicle else "Unknown"
+                    mileage = f"{l.start_mileage}-{l.end_mileage if l.end_mileage else '...'}"
                     
-                    p.drawString(50, y, l.start_time.strftime('%Y-%m-%d'))
-                    p.drawString(120, y, d_name)
-                    p.drawString(220, y, v_plate)
-                    p.drawString(300, y, l.start_time.strftime('%H:%M'))
-                    p.drawString(380, y, l.end_time.strftime('%H:%M') if l.end_time else 'In Progress')
-                    p.drawString(450, y, f"{l.start_mileage} - {l.end_mileage if l.end_mileage else '...'}")
-                    p.drawString(520, y, f"{l.fuel_consumed if l.fuel_consumed else '0'} L")
-                    y -= 15
-                    if y < 50:
-                        p.showPage()
-                        y = h - 50
+                    table_data.append([
+                        l.start_time.strftime('%Y-%m-%d'),
+                        d_name,
+                        v_plate,
+                        l.start_time.strftime('%H:%M'),
+                        l.end_time.strftime('%H:%M') if l.end_time else 'Active',
+                        mileage,
+                        f"{l.fuel_consumed if l.fuel_consumed else '0'} L"
+                    ])
+                
+                draw_styled_table(p, 30, y, w - 60, table_data)
             
             return generate_pdf_response("Driver_Trip_Logs", content)
         except Exception as e:
@@ -1377,6 +1364,7 @@ class ReportViewSet(viewsets.ViewSet):
     def delivery_performance(self, request):
         try:
             from .utils.document_generator import generate_pdf_response, draw_header, draw_kpi_card, draw_styled_table, draw_status_pill
+            from reportlab.lib import colors
             from .models import Order
             
             total_orders = Order.objects.count()
@@ -1466,33 +1454,28 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def failed_deliveries(self, request):
         try:
-            from .utils.document_generator import generate_pdf_response, draw_header
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_styled_table
             from .models import OrderException
             
             exceptions = OrderException.objects.all().order_by('-reported_at')
             
             def content(p, w, h):
-                draw_header(p, w, h, "Failed Delivery Report")
-                y = h - 110
-                p.setFont("Helvetica-Bold", 10)
-                p.drawString(100, y, "Order ID")
-                p.drawString(180, y, "Reason")
-                p.drawString(350, y, "Driver")
-                p.drawString(500, y, "Date")
-                p.line(100, y-5, w-100, y-5)
+                draw_header(p, w, h, "Exception & Failure Log", "Failed Delivery Root Cause Tracking")
                 
-                y -= 20
-                p.setFont("Helvetica", 9)
+                y = h - 120
+                table_data = [["Order ID", "Reason / Exception", "Driver", "Date", "Status"]]
+                
                 for e in exceptions:
-                    d_name = e.driver.employee.full_name if (e.driver and e.driver.employee) else "Unknown"
-                    p.drawString(100, y, f"ORD-{e.order.order_id}")
-                    p.drawString(180, y, e.exception_type[:30])
-                    p.drawString(350, y, d_name[:25])
-                    p.drawString(500, y, e.reported_at.strftime('%Y-%m-%d'))
-                    y -= 15
-                    if y < 50:
-                        p.showPage()
-                        y = h - 50
+                    d_name = e.driver.employee.full_name[:20] if (e.driver and e.driver.employee) else "Unknown"
+                    table_data.append([
+                        f"ORD-{e.order.order_id}",
+                        e.exception_type,
+                        d_name,
+                        e.reported_at.strftime('%Y-%m-%d'),
+                        "UNRESOLVED"
+                    ])
+                
+                draw_styled_table(p, 40, y, w - 80, table_data, header_color='#991b1b')
             
             return generate_pdf_response("Failed_Deliveries", content)
         except Exception as e:
@@ -1503,38 +1486,30 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def stock_transfers(self, request):
         try:
-            from .utils.document_generator import generate_pdf_response, draw_header
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_styled_table
             from warehouses.models import StockTransfer
             
             transfers = StockTransfer.objects.all().order_by('-created_at')
             
             def content(p, w, h):
-                draw_header(p, w, h, "Stock Transfer Report")
-                y = h - 110
-                p.setFont("Helvetica-Bold", 9)
-                p.drawString(50, y, "Item")
-                p.drawString(150, y, "From")
-                p.drawString(280, y, "To")
-                p.drawString(410, y, "Qty")
-                p.drawString(460, y, "Status")
-                p.drawString(520, y, "Date")
-                p.line(50, y-5, w-50, y-5)
+                draw_header(p, w, h, "Stock Transfer Log", "Warehouse Inventory Movement Report")
                 
-                y -= 20
-                p.setFont("Helvetica", 8)
+                y = h - 120
+                table_data = [["Item", "From Warehouse", "To Warehouse", "Qty", "Status", "Date"]]
+                
                 for t in transfers:
-                    src = t.source_warehouse.name if t.source_warehouse else "N/A"
-                    dst = t.destination_warehouse.name if t.destination_warehouse else "N/A"
-                    p.drawString(50, y, t.item_name[:20])
-                    p.drawString(150, y, src[:25])
-                    p.drawString(280, y, dst[:25])
-                    p.drawString(410, y, str(t.quantity))
-                    p.drawString(460, y, t.status)
-                    p.drawString(520, y, t.created_at.strftime('%Y-%m-%d'))
-                    y -= 15
-                    if y < 50:
-                        p.showPage()
-                        y = h - 50
+                    src = t.source_warehouse.name[:20] if t.source_warehouse else "N/A"
+                    dst = t.destination_warehouse.name[:20] if t.destination_warehouse else "N/A"
+                    table_data.append([
+                        t.item_name[:20],
+                        src,
+                        dst,
+                        str(t.quantity),
+                        t.status.upper(),
+                        t.created_at.strftime('%Y-%m-%d')
+                    ])
+                
+                draw_styled_table(p, 30, y, w - 60, table_data)
             
             return generate_pdf_response("Stock_Transfers", content)
         except Exception as e:
