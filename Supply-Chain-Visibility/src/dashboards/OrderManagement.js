@@ -72,8 +72,17 @@ const OrderManagement = () => {
                 await api.put(`orders/${currentOrder.order_id}/`, formData);
                 toast.success("Order parameters updated.");
             } else {
-                await api.post('orders/', formData);
+                const res = await api.post('orders/', formData);
                 toast.success("New order provisioned into the system.");
+                
+                // Track locally created orders for dispatch suggestions
+                try {
+                    const sessionOrders = JSON.parse(sessionStorage.getItem('created_orders') || '[]');
+                    if (res.data && res.data.order_id) {
+                        sessionOrders.push(res.data.order_id);
+                        sessionStorage.setItem('created_orders', JSON.stringify(sessionOrders));
+                    }
+                } catch(e) {}
             }
             setIsModalOpen(false);
             fetchOrders();

@@ -215,7 +215,7 @@ class VehicleAssignmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VehicleAssignment
-        fields = ('id', 'driver_username', 'vehicle', 'assignment_start_date', 'assignment_end_date', 'status')
+        fields = ('id', 'driver_username', 'vehicle', 'assignment_start_date', 'assignment_end_date', 'status', 'rating')
         read_only_fields = ('assignment_start_date', 'assignment_end_date', 'status')
 
     def get_driver_username(self, obj):

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import api from "../api";
-import { BiUser, BiPlus, BiPencil, BiTrash, BiSearch, BiFilterAlt, BiEnvelope, BiBuilding, BiCreditCard, BiCalendar, BiPhone } from "react-icons/bi";
+import { BiUser, BiPlus, BiPencil, BiTrash, BiSearch, BiFilterAlt, BiEnvelope, BiBuilding, BiCreditCard, BiCalendar, BiPhone, BiDownload } from "react-icons/bi";
 import { HiOutlineUserGroup } from "react-icons/hi";
 import toast from 'react-hot-toast';
 import ConfirmationModal from '../UIComponents/ConfirmationModal';
@@ -429,6 +429,21 @@ export default function UserManagement() {
         );
     };
 
+    const downloadPdf = async (endpoint, filename) => {
+        try {
+            const res = await api.get(endpoint, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+        } catch (error) {
+            toast.error("Failed to download document. Please check your permissions.");
+        }
+    };
+
     const handleBulkDelete = async () => {
         if (window.confirm(`Are you sure you want to delete ${selectedUserIds.length} users?`)) {
             try {
@@ -535,6 +550,15 @@ export default function UserManagement() {
                                     </div>
 
                                     <div className="flex items-center gap-2">
+                                        {u.role === 'driver' && (
+                                            <button 
+                                                onClick={() => downloadPdf(`reports/driver_vehicle_history/?user_id=${u.id}`, `Driver_History_${u.username}.pdf`)}
+                                                className="w-10 h-10 flex items-center justify-center rounded-xl border border-coffee-100 text-coffee-300 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-100 transition-all shadow-sm"
+                                                title="Download Monthly Driver Assignment History"
+                                            >
+                                                <BiDownload />
+                                            </button>
+                                        )}
                                         <button 
                                             onClick={() => { setSelectedUser(JSON.parse(JSON.stringify(u))); setEditTab('account'); setActiveAction('EDIT_ACCT'); }}
                                             className="w-10 h-10 flex items-center justify-center rounded-xl border border-coffee-100 text-coffee-300 hover:text-coffee-700 hover:bg-coffee-50 hover:border-coffee-200 transition-all shadow-sm"

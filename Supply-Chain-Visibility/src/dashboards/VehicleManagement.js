@@ -1,10 +1,40 @@
 import { useState, useEffect } from "react";
 import api from "../api";
-import { BiPlus, BiPencil, BiTrash, BiTransferAlt, BiSearch, BiCalendar, BiPackage, BiBadgeCheck, BiInfoCircle } from "react-icons/bi";
+import { BiPlus, BiPencil, BiTrash, BiTransferAlt, BiSearch, BiCalendar, BiPackage, BiBadgeCheck, BiInfoCircle, BiDownload, BiQrScan } from "react-icons/bi";
 import { GiTruck, GiWeight, GiResize } from "react-icons/gi";
 import toast from 'react-hot-toast';
 import ConfirmationModal from '../UIComponents/ConfirmationModal';
 import VehicleAssignments from './VehicleAssignments';
+import { QRCodeSVG } from 'qrcode.react';
+
+function QRCodePopup({ vehicle, onClose }) {
+    return (
+        <div className="fixed inset-0 bg-[#3E2723]/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+            <div className="bg-white p-8 rounded-[32px] shadow-2xl w-full max-w-sm border border-coffee-100 flex flex-col items-center text-center relative">
+                <button onClick={onClose} className="absolute top-4 right-4 text-coffee-400 hover:text-coffee-600 transition-colors">
+                    <BiTrash className="text-2xl hidden" /> {/* spacer or generic close cross if we had one, just text is fine */}
+                    ✕
+                </button>
+                <h2 className="text-2xl font-bold text-coffee-900 tracking-tight mb-2">Asset QR Code</h2>
+                <p className="text-sm text-coffee-500 mb-8 font-medium">Driver can scan this to checkout/return</p>
+                
+                <div className="p-4 bg-white border-2 border-coffee-100 rounded-2xl shadow-sm mb-6">
+                    <QRCodeSVG value={vehicle.id.toString()} size={200} level="H" />
+                </div>
+                
+                <h3 className="text-3xl font-black text-coffee-950 font-mono tracking-widest">{vehicle.plate_number}</h3>
+                <p className="text-xs font-bold text-coffee-400 mt-2 uppercase tracking-widest">{vehicle.vehicle_type} - {vehicle.make_model}</p>
+                
+                <button 
+                    onClick={() => window.print()}
+                    className="mt-8 bg-coffee-700 hover:bg-coffee-800 text-white w-full py-3 rounded-xl shadow-lg shadow-coffee-100 text-sm font-bold transition-all"
+                >
+                    Print Label
+                </button>
+            </div>
+        </div>
+    );
+}
 
 
 function AddVehiclePopup({ onSuccess, onClose }) {
@@ -211,6 +241,21 @@ export default function VehicleManagement() {
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [activeTab, setActiveTab] = useState('FLEET');
 
+    const downloadPdf = async (endpoint, filename) => {
+        try {
+            const res = await api.get(endpoint, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+        } catch (error) {
+            toast.error("Failed to download document. Please check your permissions.");
+        }
+    };
+
     const fetchVehicles = async () => {
         try {
             const res = await api.get('vehicles/');
@@ -341,6 +386,20 @@ export default function VehicleManagement() {
 
                                         <div className="flex items-center gap-3">
                                             <button 
+                                                onClick={() => { setSelectedVehicle(v); setActiveAction('QR'); }}
+                                                className="w-12 h-12 flex items-center justify-center rounded-[18px] border border-coffee-100 text-coffee-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 transition-all shadow-sm"
+                                                title="Generate Physical QR Tag"
+                                            >
+                                                <BiQrScan className="text-xl" />
+                                            </button>
+                                            <button 
+                                                onClick={() => downloadPdf(`reports/vehicle_usage_report/?vehicle_id=${v.id}`, `Vehicle_Usage_${v.plate_number}.pdf`)}
+                                                className="w-12 h-12 flex items-center justify-center rounded-[18px] border border-coffee-100 text-coffee-400 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-100 transition-all shadow-sm"
+                                                title="Download Monthly Usage Report"
+                                            >
+                                                <BiDownload className="text-xl" />
+                                            </button>
+                                            <button 
                                                 onClick={() => { setSelectedVehicle(v); setActiveAction('EDIT'); }}
                                                 className="w-12 h-12 flex items-center justify-center rounded-[18px] border border-coffee-100 text-coffee-400 hover:text-coffee-700 hover:bg-coffee-50 hover:border-coffee-200 transition-all shadow-sm"
                                                 title="Edit Specifications"
@@ -379,6 +438,7 @@ export default function VehicleManagement() {
             
             {activeAction === 'ADD' && <AddVehiclePopup onSuccess={() => { setActiveAction(null); fetchVehicles(); toast.success("Asset Provisioned"); }} onClose={() => setActiveAction(null)} />}
             {activeAction === 'EDIT' && selectedVehicle && <EditVehiclePopup vehicle={selectedVehicle} onSuccess={() => { setActiveAction(null); setSelectedVehicle(null); fetchVehicles(); toast.success("Asset Synchronized"); }} onClose={() => { setActiveAction(null); setSelectedVehicle(null); }} />}
+            {activeAction === 'QR' && selectedVehicle && <QRCodePopup vehicle={selectedVehicle} onClose={() => { setActiveAction(null); setSelectedVehicle(null); }} />}
             
             <ConfirmationModal 
                 isOpen={!!deleteTarget}

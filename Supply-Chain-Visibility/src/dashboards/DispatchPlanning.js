@@ -132,7 +132,20 @@ export default function DispatchPlanning() {
         api.get('dispatch/recommendations/')
       ]);
 
-      setOrders(hasQueryParams ? orderRes.data.results : orderRes.data);
+      const fetchedOrders = hasQueryParams ? orderRes.data.results : orderRes.data;
+      setOrders(fetchedOrders);
+      
+      try {
+        const sessionOrders = JSON.parse(sessionStorage.getItem('created_orders') || '[]');
+        if (sessionOrders.length > 0) {
+            const validIds = sessionOrders.filter(id => fetchedOrders.some(o => o.order_id === id));
+            if (validIds.length > 0) {
+                setSelectedOrders(validIds);
+                // Optionally remove from session if we want it to be a one-time suggestion
+            }
+        }
+      } catch(e) {}
+
       setVehicles(vehicleRes.data.filter(v => 
         v.assignedDriver && 
         (['available', 'idle', 'ready', 'in_use', 'active'].includes((v.status || "").toLowerCase())) &&
@@ -424,16 +437,29 @@ export default function DispatchPlanning() {
               if (!vSearchQuery) return true;
               const q = vSearchQuery.toLowerCase();
               return v.plate_number.toLowerCase().includes(q) || (v.make_model || "").toLowerCase().includes(q) || (v.driver_name || "").toLowerCase().includes(q);
+            }).sort((a, b) => {
+              if (selectedOrders.length === 0) return 0;
+              const aCompatible = (!requiresRefrigeration || a.is_refrigerated) && (parseFloat(a.capacity) >= totalWeight) && (parseFloat(a.volume) >= totalVolume);
+              const bCompatible = (!requiresRefrigeration || b.is_refrigerated) && (parseFloat(b.capacity) >= totalWeight) && (parseFloat(b.volume) >= totalVolume);
+              if (aCompatible && !bCompatible) return -1;
+              if (!aCompatible && bCompatible) return 1;
+              return 0;
             }).map(v => {
               const isCompatible = !requiresRefrigeration || v.is_refrigerated;
               const isSelected = selectedVehicle === v.id;
+              const isSuggested = selectedOrders.length > 0 && isCompatible && (parseFloat(v.capacity) >= totalWeight) && (parseFloat(v.volume) >= totalVolume);
 
               return (
                 <div
                   key={v.id}
                   onClick={() => setSelectedVehicle(v.id)}
-                  className={`p-8 bg-white rounded-[40px] border-2 transition-all cursor-pointer relative ${isSelected ? 'border-coffee-900 shadow-xl' : 'border-coffee-50 hover:border-coffee-200 shadow-sm'}`}
+                  className={`p-8 bg-white rounded-[40px] border-2 transition-all cursor-pointer relative ${isSelected ? 'border-coffee-900 shadow-xl' : 'border-coffee-50 hover:border-coffee-200 shadow-sm'} ${isSuggested && !isSelected ? 'ring-4 ring-emerald-400/30' : ''}`}
                 >
+                  {isSuggested && !isSelected && (
+                      <div className="absolute -top-3 -right-3 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl shadow-lg">
+                          ✨ Suggested
+                      </div>
+                  )}
                   <div className="flex items-center gap-5 mb-8">
                     <div className={`p-4 rounded-2xl ${isSelected ? 'bg-coffee-950 text-white' : 'bg-coffee-50 text-coffee-400'}`}>
                       <HiOutlineTruck className="text-2xl" />

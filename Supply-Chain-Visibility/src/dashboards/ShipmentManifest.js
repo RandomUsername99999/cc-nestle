@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../api";
 import { 
     BiSearch, BiFilterAlt, BiPackage, BiUser, 
-    BiMapPin, BiCheckDouble, BiTimeFive, BiChevronRight, BiCube, BiSelection, BiX
+    BiMapPin, BiCheckDouble, BiTimeFive, BiChevronRight, BiCube, BiSelection, BiX, BiDownload
 } from "react-icons/bi";
 import { GiTruck } from "react-icons/gi";
 import { toast } from "react-hot-toast";
@@ -18,6 +18,21 @@ const ShipmentManifest = () => {
     useEffect(() => {
         fetchShipments();
     }, []);
+
+    const downloadPdf = async (endpoint, filename) => {
+        try {
+            const res = await api.get(endpoint, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+        } catch (error) {
+            toast.error("Failed to download document. Please ensure you have the correct permissions.");
+        }
+    };
 
     const deleteManifest = async (id) => {
         if(!window.confirm("Permanent deletion of this manifest audit?")) return;
@@ -104,6 +119,14 @@ const ShipmentManifest = () => {
                     <div className="w-12 h-12 bg-coffee-50 rounded-2xl flex items-center justify-center text-coffee-700 border border-coffee-100">
                         <BiSelection className="text-2xl" />
                     </div>
+                </div>
+                <div className="flex items-center gap-3 ml-4">
+                    <button 
+                        onClick={() => downloadPdf('reports/fleet_summary/', 'Fleet_Summary.pdf')}
+                        className="bg-coffee-950 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-coffee-900 transition-all shadow-lg shadow-coffee-950/20 active:scale-95"
+                    >
+                        Fleet Summary PDF
+                    </button>
                 </div>
             </div>
 
@@ -196,7 +219,16 @@ const ShipmentManifest = () => {
                                     <div key={idx} className="p-4 rounded-2xl bg-coffee-50/50 border border-coffee-100 transition-all hover:bg-coffee-50">
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-xs font-black text-coffee-900">ORD-{mapping.order_details.order_id}</span>
-                                            <span className="text-[10px] font-black uppercase text-coffee-400">{mapping.order_details.shipment_type}</span>
+                                            <div className="flex items-center space-x-2">
+                                                <span className="text-[10px] font-black uppercase text-coffee-400">{mapping.order_details.shipment_type}</span>
+                                                <button 
+                                                    onClick={() => downloadPdf(`orders/${mapping.order_details.order_id}/download_pdf/`, `Waybill_ORD_${mapping.order_details.order_id}.pdf`)}
+                                                    className="p-1 bg-coffee-100 rounded text-coffee-600 hover:bg-coffee-200 transition-colors"
+                                                    title="Download Order Waybill"
+                                                >
+                                                    <BiDownload className="text-sm" />
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
                                             <div className="flex items-start space-x-2 overflow-hidden">
@@ -226,7 +258,10 @@ const ShipmentManifest = () => {
                                     >
                                         Purge Audit
                                     </button>
-                                    <button className="flex-1 bg-[#3E2723] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-coffee-900/20 active:scale-95 transition-all">
+                                    <button 
+                                        onClick={() => downloadPdf(`shipments/${selectedShipment.shipment_id}/download_manifest/`, `Manifest_MF_${selectedShipment.shipment_id}.pdf`)}
+                                        className="flex-1 bg-[#3E2723] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-coffee-900/20 active:scale-95 transition-all"
+                                    >
                                         Print Manifest
                                     </button>
                                 </div>

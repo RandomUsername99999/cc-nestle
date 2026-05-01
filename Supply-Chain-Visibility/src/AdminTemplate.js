@@ -143,6 +143,22 @@ function VerticalNavbar({ sidebarOpen, userRole }) {
   const location = useLocation();
   const { t } = useLanguage();
 
+  const [clickCounts, setClickCounts] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`nav_clicks_${userRole}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const handleNavClick = (item) => {
+    const newCounts = { ...clickCounts, [item.key]: (clickCounts[item.key] || 0) + 1 };
+    setClickCounts(newCounts);
+    localStorage.setItem(`nav_clicks_${userRole}`, JSON.stringify(newCounts));
+    navigate(item.link);
+  };
+
   const filteredNavItems = navItemsData.filter(item => {
     // 1. Admin restricted modules
     if (item.key === "users" || item.key === "audit" || item.key === "reports") {
@@ -169,6 +185,10 @@ function VerticalNavbar({ sidebarOpen, userRole }) {
         return ['dashboard', 'orders', 'profile', 'settings'].includes(item.key);
     }
     return true;
+  }).sort((a, b) => {
+    const countA = clickCounts[a.key] || 0;
+    const countB = clickCounts[b.key] || 0;
+    return countB - countA;
   });
 
   return (
@@ -178,7 +198,7 @@ function VerticalNavbar({ sidebarOpen, userRole }) {
         return (
           <button
             key={item.key}
-            onClick={() => navigate(item.link)}
+            onClick={() => handleNavClick(item)}
             className={`w-full flex items-center rounded-2xl transition-all duration-300 group relative ${isActive
               ? 'bg-gradient-to-r from-coffee-500 to-coffee-400 shadow-lg shadow-coffee-950/20 transform scale-[1.03] active:scale-100'
               : 'hover:bg-white/5 active:scale-95'

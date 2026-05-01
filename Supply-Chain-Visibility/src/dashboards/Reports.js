@@ -24,6 +24,21 @@ export default function Reports() {
     }
   };
 
+  const downloadPdf = async (endpoint, filename) => {
+    try {
+        const res = await api.get(endpoint, { responseType: 'blob' });
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+    } catch (error) {
+        toast.error("Failed to download document. Please check your credentials.");
+    }
+  };
+
   const filteredLogs = logs.filter(log => 
     log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.resource_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -37,9 +52,17 @@ export default function Reports() {
           <h1 className="text-2xl font-bold text-[#3E2723]">System Reports & Audit Logs</h1>
           <p className="text-sm text-[#8D6E63]">Track all administrative and system actions for security auditing.</p>
         </div>
-        <button onClick={fetchLogs} className="bg-white border border-[#EAE3D9] p-2 rounded-lg text-[#5D4037] hover:bg-[#F5F0EB]">
-           <BiHistory className={loading ? "animate-spin" : ""} size={20} />
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => downloadPdf('reports/fleet_summary/', 'Fleet_Operations_Summary.pdf')}
+            className="flex items-center gap-2 px-6 py-2 bg-[#3E2723] text-white rounded-xl text-sm font-black uppercase tracking-widest hover:bg-[#5D4037] shadow-lg shadow-[#3E2723]/20 transition-all active:scale-95"
+          >
+            <BiDownload /> Fleet Summary PDF
+          </button>
+          <button onClick={fetchLogs} className="bg-white border border-[#EAE3D9] p-2 rounded-lg text-[#5D4037] hover:bg-[#F5F0EB]">
+             <BiHistory className={loading ? "animate-spin" : ""} size={20} />
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-[#EAE3D9] overflow-hidden">
@@ -54,14 +77,38 @@ export default function Reports() {
                 className="w-full pl-10 pr-4 py-2 border border-[#EAE3D9] rounded-xl text-sm focus:ring-[#8D6E63] focus:border-[#8D6E63]"
               />
            </div>
-           <div className="flex items-center gap-2">
-              <button className="flex items-center gap-2 px-4 py-2 bg-white border border-[#EAE3D9] rounded-xl text-sm text-[#5D4037] hover:bg-[#F5F0EB]">
-                <BiFilterAlt /> Filter
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 bg-[#3E2723] text-white rounded-xl text-sm font-bold hover:bg-[#5D4037]">
-                <BiDownload /> Export CSV
-              </button>
-           </div>
+            <div className="flex flex-wrap items-center gap-2">
+               <button 
+                  onClick={() => downloadPdf('reports/delivery_performance/', 'Delivery_Performance.pdf')}
+                  className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-xs font-black text-indigo-700 hover:bg-indigo-100 transition-all"
+               >
+                  <BiDownload /> Performance
+               </button>
+               <button 
+                  onClick={() => downloadPdf('reports/failed_deliveries/', 'Failed_Deliveries.pdf')}
+                  className="flex items-center gap-2 px-3 py-2 bg-rose-50 border border-rose-100 rounded-xl text-xs font-black text-rose-700 hover:bg-rose-100 transition-all"
+               >
+                  <BiDownload /> Failed Deliveries
+               </button>
+               <button 
+                  onClick={() => downloadPdf('reports/driver_trip_logs/', 'Driver_Trip_Logs.pdf')}
+                  className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-xl text-xs font-black text-amber-700 hover:bg-amber-100 transition-all"
+               >
+                  <BiDownload /> Trip Logs
+               </button>
+               <button 
+                  onClick={() => downloadPdf('reports/stock_transfers/', 'Stock_Transfers.pdf')}
+                  className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-black text-emerald-700 hover:bg-emerald-100 transition-all"
+               >
+                  <BiDownload /> Stock Transfers
+               </button>
+               <button className="flex items-center gap-2 px-4 py-2 bg-white border border-[#EAE3D9] rounded-xl text-sm text-[#5D4037] hover:bg-[#F5F0EB]">
+                 <BiFilterAlt /> Filter
+               </button>
+               <button className="flex items-center gap-2 px-4 py-2 bg-[#3E2723] text-white rounded-xl text-sm font-bold hover:bg-[#5D4037]">
+                 <BiDownload /> Export CSV
+               </button>
+            </div>
         </div>
 
         <div className="overflow-x-auto">

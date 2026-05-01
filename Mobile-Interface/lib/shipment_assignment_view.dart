@@ -451,25 +451,124 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
         children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(child: _buildSecondaryButton(
-                    label: "NAVIGATE",
-                    icon: Icons.navigation_rounded,
-                    onPressed: () => _launchNavigation(stop['address']),
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildActionBtn(
-                    label: "DELIVER",
-                    color: const Color(0xFF3E2723),
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => QRScannerView(title: "Deliver Stop", onScan: (code) => _completeDelivery(stop['order_id'], code)))),
-                  )),
+                  Row(
+                    children: [
+                      Expanded(child: _buildSecondaryButton(
+                        label: "NAVIGATE",
+                        icon: Icons.navigation_rounded,
+                        onPressed: () => _launchNavigation(stop['address']),
+                      )),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildActionBtn(
+                        label: "DELIVER",
+                        color: const Color(0xFF3E2723),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => QRScannerView(title: "Deliver Stop", onScan: (code) => _completeDelivery(stop['order_id'], code)))),
+                      )),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildIssueButton(
+                    onPressed: () => _showExceptionDialog(stop['order_id']),
+                  ),
                 ],
               ),
             )
         ],
       ),
     );
+  }
+
+  Widget _buildIssueButton({required VoidCallback onPressed}) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 50),
+        side: const BorderSide(color: Colors.redAccent, width: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.report_problem_rounded, color: Colors.redAccent, size: 18),
+          SizedBox(width: 8),
+          Text("REPORT ISSUE / EXCEPTION", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.redAccent, letterSpacing: 1)),
+        ],
+      ),
+    );
+  }
+
+  void _showExceptionDialog(String orderId) {
+    String? selectedReason = 'damaged_goods';
+    final notesController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Report Delivery Issue", style: TextStyle(fontWeight: FontWeight.w900)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              value: selectedReason,
+              items: const [
+                DropdownMenuItem(value: 'damaged_goods', child: Text("Damaged Goods")),
+                DropdownMenuItem(value: 'no_answer', child: Text("Recipient Not Available")),
+                DropdownMenuItem(value: 'refused', child: Text("Delivery Refused")),
+                DropdownMenuItem(value: 'address_not_found', child: Text("Address Issues")),
+                DropdownMenuItem(value: 'other', child: Text("Other / Mechanical")),
+              ],
+              onChanged: (v) => selectedReason = v,
+              decoration: const InputDecoration(labelText: "Reason"),
+            ),
+            TextField(
+              controller: notesController,
+              decoration: const InputDecoration(labelText: "Additional Notes"),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _reportException(orderId, selectedReason!, notesController.text);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text("SUBMIT REPORT", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _reportException(String orderId, String type, String notes) async {
+    setState(() => _isLoading = true);
+    try {
+      Position pos = await Geolocator.getCurrentPosition();
+      final resp = await http.post(
+        Uri.parse("${widget.baseUrl}orders/$orderId/report_exception/"),
+        headers: _authHeaders,
+        body: jsonEncode({
+          "exception_type": type,
+          "notes": notes,
+          "lat": pos.latitude,
+          "lng": pos.longitude,
+        }),
+      );
+      if (resp.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Issue logged and reported to dispatch."), backgroundColor: Colors.orange));
+        _fetchAssignment();
+      } else {
+        _showError("Failed to report issue");
+      }
+    } catch (e) {
+      _showError("Connection error during reporting");
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   // --- STAGE 4: COMPLETION ---

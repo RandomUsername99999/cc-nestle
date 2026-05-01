@@ -112,6 +112,7 @@ class VehicleAssignment(models.Model):
     assignment_end_date = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, default='active')
     assigned_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, db_column='assigned_by')
+    rating = models.CharField(max_length=20, null=True, blank=True)
 
     class Meta:
         managed = True

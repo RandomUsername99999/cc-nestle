@@ -319,6 +319,45 @@ class VehicleViewSet(viewsets.ModelViewSet):
         suggestions = get_fill_suggestions(unassigned_data, cluster_coords, remaining_kg, 0)
         return Response(suggestions)
 
+    @action(detail=True, methods=['post'])
+    def checkout_vehicle(self, request, pk=None):
+        vehicle = self.get_object()
+        from .models import VehicleAssignment
+        from drivers.models import Driver
+        try:
+            driver = Driver.objects.get(employee__user=request.user)
+            assignment = VehicleAssignment.objects.filter(vehicle=vehicle, driver=driver, status='active').first()
+            if assignment:
+                return Response({'success': True, 'message': 'Vehicle successfully checked out.'})
+            return Response({'error': 'You are not assigned to this vehicle.'}, status=400)
+        except Driver.DoesNotExist:
+            return Response({'error': 'Only drivers can checkout vehicles.'}, status=403)
+
+    @action(detail=True, methods=['post'])
+    def return_vehicle(self, request, pk=None):
+        vehicle = self.get_object()
+        rating = request.data.get('rating')
+        from .models import VehicleAssignment
+        from drivers.models import Driver
+        from django.utils import timezone
+        try:
+            driver = Driver.objects.get(employee__user=request.user)
+            assignment = VehicleAssignment.objects.filter(vehicle=vehicle, driver=driver, status='active').first()
+            if assignment:
+                if rating:
+                    assignment.rating = rating
+                assignment.status = 'completed'
+                assignment.assignment_end_date = timezone.now()
+                assignment.save()
+                
+                # Unassign from vehicle
+                vehicle.status = 'available'
+                vehicle.save()
+                return Response({'success': True, 'message': 'Vehicle successfully returned.'})
+            return Response({'error': 'You are not actively assigned to this vehicle.'}, status=400)
+        except Driver.DoesNotExist:
+            return Response({'error': 'Only drivers can return vehicles.'}, status=403)
+
 class VehicleAssignmentViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = VehicleAssignment.objects.all().order_by('-assignment_start_date')
     serializer_class = VehicleAssignmentSerializer
@@ -517,20 +556,24 @@ class OrderViewSet(viewsets.ModelViewSet):
             notes=notes
         )
         
-        # Log status change
+        # Convert it to a return task
         old_status = order.status
-        order.status = 'delivery_failed'
+        order.status = 'in_transit'
+        order.delivery_address = f"[RETURN TO WAREHOUSE] {order.pickup_address}"
+        if order.pickup_lat and order.pickup_lng:
+            order.delivery_lat = order.pickup_lat
+            order.delivery_lng = order.pickup_lng
         order.save()
         
         OrderStatusLog.objects.create(
             order=order,
             from_status=old_status,
-            to_status='delivery_failed',
+            to_status='delivery_failed_returning',
             changed_by=request.user,
             source='driver_exception'
         )
         
-        return Response({'success': True, 'message': 'Exception reported successfully'})
+        return Response({'success': True, 'message': 'Exception reported. Please return the item to the warehouse.'})
 
     @action(detail=True, methods=['get'])
     def download_pdf(self, request, pk=None):
@@ -931,9 +974,10 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         if not qr_token or not order_id:
              return Response({'error': 'QR token and order_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Exact QR match: token must contain shipment and order identifiers
+        # QR match: token must contain shipment and order identifiers, OR be the manifest QR code
         expected_token_part = f"SHP-{shipment.shipment_id}-ORD-{order_id}"
-        if expected_token_part not in qr_token and str(order_id) not in qr_token:
+        manifest_qr = f"MF-{shipment.shipment_id}"
+        if expected_token_part not in qr_token and str(order_id) not in qr_token and manifest_qr not in qr_token:
              return Response({'error': 'QR mismatch: Parcel does not belong to this stop.'}, status=status.HTTP_400_BAD_REQUEST)
 
         from .models import Order, OrderStatusLog, CustomUser
@@ -1065,8 +1109,8 @@ class ShipmentViewSet(viewsets.ModelViewSet):
                 
                 asset_data = [
                     ["Category", "Details"],
-                    ["Primary Vehicle", f"{shipment.vehicle.plate_number} ({shipment.vehicle.manufacturer} {shipment.vehicle.model})"],
-                    ["Assigned Driver", f"{shipment.driver.employee.full_name}"],
+                    ["Primary Vehicle", f"{shipment.vehicle.plate_number} ({shipment.vehicle.manufacturer} {shipment.vehicle.model})" if shipment.vehicle else "Unassigned"],
+                    ["Assigned Driver", f"{shipment.driver.employee.full_name}" if (shipment.driver and hasattr(shipment.driver, 'employee') and shipment.driver.employee) else "Unassigned"],
                     ["Refrigeration", "YES (ACTIVE)" if shipment.requires_refrigeration else "NO"],
                     ["Dispatch Time", shipment.deployed_at.strftime('%Y-%m-%d %H:%M') if shipment.deployed_at else "N/A"]
                 ]
@@ -1805,6 +1849,67 @@ class ReportViewSet(viewsets.ViewSet):
         except Exception as e:
             import traceback
             print(traceback.format_exc())
+            return Response({"error": str(e)}, status=500)
+
+    @action(detail=False, methods=['get'])
+    def driver_vehicle_history(self, request):
+        user_id = request.query_params.get('user_id')
+        if not user_id:
+            return Response({"error": "user_id is required"}, status=400)
+        try:
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_styled_table
+            from .models import VehicleAssignment
+            from drivers.models import Driver
+            
+            driver = Driver.objects.get(employee__user__user_id=user_id)
+            assignments = VehicleAssignment.objects.filter(driver=driver).order_by('-assigned_at')
+            
+            def content(p, w, h):
+                draw_header(p, w, h, "Driver Asset Assignment Timeline", f"Monthly Report - Driver: {driver.employee.full_name}")
+                y = h - 120
+                table_data = [["Vehicle Plate", "Model", "Assigned At", "Unassigned At", "Status"]]
+                for a in assignments:
+                    v_info = a.vehicle.plate_number if a.vehicle else "Unknown"
+                    v_model = a.vehicle.model if a.vehicle else "N/A"
+                    assigned = a.assigned_at.strftime('%Y-%m-%d %H:%M') if a.assigned_at else "N/A"
+                    unassigned = a.unassigned_at.strftime('%Y-%m-%d %H:%M') if getattr(a, 'unassigned_at', None) else "Active"
+                    status = a.status.upper() if hasattr(a, 'status') else "-"
+                    table_data.append([v_info, v_model, assigned, unassigned, status])
+                draw_styled_table(p, 40, y, w - 80, table_data)
+            return generate_pdf_response(f"Driver_History_{user_id}", content)
+        except Driver.DoesNotExist:
+            return Response({"error": "Driver not found"}, status=404)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+    @action(detail=False, methods=['get'])
+    def vehicle_usage_report(self, request):
+        vehicle_id = request.query_params.get('vehicle_id')
+        if not vehicle_id:
+            return Response({"error": "vehicle_id is required"}, status=400)
+        try:
+            from .utils.document_generator import generate_pdf_response, draw_header, draw_styled_table
+            from .models import VehicleAssignment
+            from vehicles.models import Vehicle
+            
+            vehicle = Vehicle.objects.get(vehicle_id=vehicle_id)
+            assignments = VehicleAssignment.objects.filter(vehicle=vehicle).order_by('-assigned_at')
+            
+            def content(p, w, h):
+                draw_header(p, w, h, "Vehicle Usage Timeline", f"Monthly Report - Asset: {vehicle.plate_number}")
+                y = h - 120
+                table_data = [["Driver Name", "Assigned At", "Unassigned At", "Status"]]
+                for a in assignments:
+                    d_name = a.driver.employee.full_name if (a.driver and a.driver.employee) else "Unknown"
+                    assigned = a.assigned_at.strftime('%Y-%m-%d %H:%M') if a.assigned_at else "N/A"
+                    unassigned = a.unassigned_at.strftime('%Y-%m-%d %H:%M') if getattr(a, 'unassigned_at', None) else "Active"
+                    status = a.status.upper() if hasattr(a, 'status') else "-"
+                    table_data.append([d_name, assigned, unassigned, status])
+                draw_styled_table(p, 40, y, w - 80, table_data)
+            return generate_pdf_response(f"Vehicle_Usage_{vehicle_id}", content)
+        except Vehicle.DoesNotExist:
+            return Response({"error": "Vehicle not found"}, status=404)
+        except Exception as e:
             return Response({"error": str(e)}, status=500)
 
 

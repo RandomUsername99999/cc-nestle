@@ -91,6 +91,7 @@ export default function VehicleAssignments() {
     const [selectedDriverId, setSelectedDriverId] = useState("");
     const [loading, setLoading] = useState(false);
     const [revokeTarget, setRevokeTarget] = useState(null);
+    const [suggestedVehicleIds, setSuggestedVehicleIds] = useState([]);
 
     const fetchData = async () => {
         try {
@@ -106,6 +107,18 @@ export default function VehicleAssignments() {
     useEffect(() => {
         fetchData();
     }, []);
+
+    useEffect(() => {
+        if (selectedDriverId) {
+            api.get(`assignments/driver_history/?driver_id=${selectedDriverId}`).then(res => {
+                const happyAssignments = res.data.filter(a => a.rating === 'happy');
+                const vIds = happyAssignments.map(a => a.vehicle);
+                setSuggestedVehicleIds([...new Set(vIds)]);
+            }).catch(() => setSuggestedVehicleIds([]));
+        } else {
+            setSuggestedVehicleIds([]);
+        }
+    }, [selectedDriverId]);
 
     const unassignedVehicles = vehicles.filter(v => !v.assignedDriver);
     const assignedVehicles = vehicles.filter(v => v.assignedDriver);
@@ -269,17 +282,21 @@ export default function VehicleAssignments() {
                         <form onSubmit={handleAssignmentUpdate} className="space-y-6">
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-[11px] font-bold text-coffee-400 mb-1.5 uppercase tracking-widest">Select Available Vehicle</label>
-                                    <select value={selectedVehicleId} onChange={e => setSelectedVehicleId(e.target.value)} required className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm font-bold text-coffee-700 focus:ring-8 focus:ring-coffee-500/5 focus:border-coffee-500 outline-none transition-all">
-                                        <option value="" disabled>-- Detect Asset --</option>
-                                        {unassignedVehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number} ({v.make_model})</option>)}
-                                    </select>
-                                </div>
-                                <div>
                                     <label className="block text-[11px] font-bold text-coffee-400 mb-1.5 uppercase tracking-widest">Select Available Driver</label>
                                     <select value={selectedDriverId} onChange={e => setSelectedDriverId(e.target.value)} required className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm font-bold text-coffee-700 focus:ring-8 focus:ring-coffee-500/5 focus:border-coffee-500 outline-none transition-all">
                                         <option value="" disabled>-- Detect Driver --</option>
                                         {availableDrivers.map(d => <option key={d.id} value={d.id}>{d.username} ({d.email})</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-bold text-coffee-400 mb-1.5 uppercase tracking-widest">Select Available Vehicle</label>
+                                    <select value={selectedVehicleId} onChange={e => setSelectedVehicleId(e.target.value)} required className="w-full bg-coffee-50 border border-coffee-200 rounded-xl px-4 py-3 text-sm font-bold text-coffee-700 focus:ring-8 focus:ring-coffee-500/5 focus:border-coffee-500 outline-none transition-all">
+                                        <option value="" disabled>-- Detect Asset --</option>
+                                        {unassignedVehicles.map(v => (
+                                            <option key={v.id} value={v.id}>
+                                                {v.plate_number} ({v.make_model}) {suggestedVehicleIds.includes(v.id) ? '⭐⭐⭐ RECOMMENDED' : ''}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
                             </div>

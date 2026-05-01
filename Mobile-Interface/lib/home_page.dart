@@ -7,6 +7,7 @@ import 'package:cc_group/shipment_assignment_view.dart';
 import 'package:cc_group/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cc_group/delivery_search_screen.dart';
+import 'package:cc_group/qr_scanner_view.dart';
 
 class HomePage extends StatefulWidget {
   final int userId;
@@ -179,6 +180,63 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _handleVehicleAction(bool isReturn) {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => QRScannerView(
+      title: isReturn ? "Scan to Return Asset" : "Scan to Checkout Asset",
+      onScan: (code) async {
+        final vId = code.replaceAll(RegExp(r'[^0-9]'), '');
+        if (vId.isEmpty) return;
+        
+        if (isReturn) {
+          String? rating;
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text("Rate Vehicle Condition"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(title: const Text("Happy 😊"), onTap: () { rating = 'happy'; Navigator.pop(context); }),
+                  ListTile(title: const Text("OK 😐"), onTap: () { rating = 'ok'; Navigator.pop(context); }),
+                  ListTile(title: const Text("Sad 😢"), onTap: () { rating = 'sad'; Navigator.pop(context); }),
+                ]
+              ),
+            )
+          );
+          if (rating == null) return;
+          
+          try {
+            final res = await http.post(
+              Uri.parse("${_baseApiUrl}vehicles/$vId/return_vehicle/"),
+              headers: _authHeaders,
+              body: jsonEncode({'rating': rating}),
+            );
+            if (res.statusCode == 200) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vehicle returned.")));
+              _fetchActiveTask();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${jsonDecode(res.body)['error']}")));
+            }
+          } catch(e) {}
+        } else {
+          try {
+            final res = await http.post(
+              Uri.parse("${_baseApiUrl}vehicles/$vId/checkout_vehicle/"),
+              headers: _authHeaders,
+            );
+            if (res.statusCode == 200) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vehicle checked out.")));
+              _fetchActiveTask();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${jsonDecode(res.body)['error']}")));
+            }
+          } catch(e) {}
+        }
+      }
+    )));
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -281,27 +339,53 @@ class _HomePageState extends State<HomePage> {
                       _buildIdleState(),
 
                     const SizedBox(height: 32),
-                    
-                    // Fleet Info Overlay (Small & Integrated)
-                    if (_activeTask?['vehicle'] is Map)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFEFEBE9)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.local_shipping, color: Color(0xFF8D6E63), size: 20),
-                            const SizedBox(width: 12),
-                            Text(
-                              "LOGISTICS UNIT: ${_activeTask!['vehicle']['plate_number']}",
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 0.5),
+                    // Fleet Action Panel
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => _handleVehicleAction(false),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: const Color(0xFFEFEBE9)),
+                              ),
+                              child: const Column(
+                                children: [
+                                  Icon(Icons.login_rounded, color: Color(0xFF8D6E63)),
+                                  SizedBox(height: 8),
+                                  Text("CHECKOUT ASSET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 0.5)),
+                                ],
+                              ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => _handleVehicleAction(true),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: const Color(0xFFEFEBE9)),
+                              ),
+                              child: const Column(
+                                children: [
+                                  Icon(Icons.logout_rounded, color: Color(0xFF8D6E63)),
+                                  SizedBox(height: 8),
+                                  Text("RETURN ASSET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 0.5)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
