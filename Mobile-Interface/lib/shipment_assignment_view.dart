@@ -26,6 +26,7 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
   Map<String, dynamic>? _data;
   bool _isLoading = true;
   String? _error;
+  bool _missionCompleted = false;
   Timer? _acceptanceTimer;
   int _secondsRemaining = 900; // 15 minutes timeout
   StreamSubscription<Position>? _locationSubscription;
@@ -231,10 +232,12 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
       );
       if (resp.statusCode == 200) {
         final result = jsonDecode(resp.body);
-        if (result['is_completed']) {
+        if (result['is_completed'] == true) {
           _stopTracking(id);
+          setState(() => _missionCompleted = true);
+        } else {
+          _fetchAssignment();
         }
-        _fetchAssignment();
       } else {
         _showError(jsonDecode(resp.body)['error'] ?? "Verification Error");
       }
@@ -317,6 +320,7 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
   }
 
   Widget _buildBody(String status) {
+    if (_missionCompleted) return _buildFinalizedStage();
     switch (status) {
       case 'dispatched': return _buildAcceptanceStage();
       case 'accepted': return _buildPickupStage();
@@ -382,7 +386,16 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
           _buildSecondaryButton(
             label: "SCAN PICKUP QR",
             icon: Icons.qr_code_scanner_rounded,
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => QRScannerView(title: "Scan Pickup", onScan: _confirmPickup))),
+            onPressed: () {
+              final messenger = ScaffoldMessenger.of(context);
+              Navigator.push(context, MaterialPageRoute(builder: (scanCtx) => QRScannerView(
+                title: "Scan Pickup",
+                onScan: (code) async {
+                  Navigator.pop(scanCtx);
+                  await _confirmPickup(code);
+                },
+              )));
+            },
           ),
         ],
       ),
@@ -391,9 +404,8 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
 
   // --- STAGE 3: TRANSIT / DELIVERY FLOW ---
   Widget _buildTransitStage() {
-    final stops = _data!['stops'] as List;
-    // Find the first undelivered stop
-    final nextStop = stops.firstWhere((s) => true); // In a real app, track undelivered indices
+    final allStops = _data!['stops'] as List;
+    final pendingStops = allStops.where((s) => s['status'] != 'delivered' && s['status'] != 'delivery_failed').toList();
     
     return Column(
       children: [
@@ -404,7 +416,7 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMiniStat("${_data!['route_summary']['total_stops']}", "STOPS"),
+              _buildMiniStat("${pendingStops.length}", "REMAINING"),
               _buildMiniStat("${_data!['route_summary']['total_distance_km']}", "KM"),
               _buildMiniStat("${_data!['route_summary']['estimated_duration_minutes']}", "ETA"),
             ],
@@ -414,9 +426,9 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(32),
-            itemCount: stops.length,
+            itemCount: pendingStops.length,
             itemBuilder: (context, index) {
-              final stop = stops[index];
+              final stop = pendingStops[index];
               return _buildFieldStopCard(stop);
             },
           ),
@@ -468,7 +480,16 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
                       Expanded(child: _buildActionBtn(
                         label: "DELIVER",
                         color: const Color(0xFF3E2723),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => QRScannerView(title: "Deliver Stop", onScan: (code) => _completeDelivery(stop['order_id'], code)))),
+                        onPressed: () {
+                          final messenger = ScaffoldMessenger.of(context);
+                          Navigator.push(context, MaterialPageRoute(builder: (scanCtx) => QRScannerView(
+                            title: "Deliver Stop",
+                            onScan: (code) async {
+                              Navigator.pop(scanCtx);
+                              await _completeDelivery(stop['order_id'], code);
+                            },
+                          )));
+                        },
                       )),
                     ],
                   ),

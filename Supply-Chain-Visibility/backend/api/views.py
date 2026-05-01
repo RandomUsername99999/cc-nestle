@@ -863,7 +863,8 @@ class ShipmentViewSet(viewsets.ModelViewSet):
                     "customer_phone": "0712345678",
                     "estimated_arrival": current_time.isoformat(),
                     "parcels": o.quantity,
-                    "weight_kg": float(o.weight_kg)
+                    "weight_kg": float(o.weight_kg),
+                    "status": o.status
                 })
                 prev_lat, prev_lng = float(o.delivery_lat), float(o.delivery_lng)
 
