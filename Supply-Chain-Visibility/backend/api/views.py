@@ -186,6 +186,8 @@ class VehicleViewSet(viewsets.ModelViewSet):
     serializer_class = VehicleSerializer
 
     def get_permissions(self):
+        if self.action in ['checkout_vehicle', 'return_vehicle', 'retrieve']:
+            return [permissions.IsAuthenticated()]
         return [IsInternalRole()]
 
     def check_object_permissions(self, request, obj):

@@ -181,72 +181,95 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _handleVehicleAction(bool isReturn) {
-    Navigator.push(context, MaterialPageRoute(builder: (context) => QRScannerView(
+    // Capture context-dependent objects BEFORE pushing the scanner
+    final messenger = ScaffoldMessenger.of(context);
+    final authHeaders = Map<String, String>.from(_authHeaders);
+    final baseUrl = _baseApiUrl;
+    final homeContext = context;
+
+    Navigator.push(context, MaterialPageRoute(builder: (scannerContext) => QRScannerView(
       title: isReturn ? "Scan to Return Asset" : "Scan to Checkout Asset",
       onScan: (code) async {
         final vId = code.replaceAll(RegExp(r'[^0-9]'), '');
-        if (vId.isEmpty) return;
-        
+        if (vId.isEmpty) {
+          Navigator.pop(scannerContext);
+          messenger.showSnackBar(const SnackBar(content: Text("Invalid QR code scanned.")));
+          return;
+        }
+
         if (isReturn) {
           String? rating;
           await showDialog(
-            context: context,
+            context: scannerContext,
             barrierDismissible: false,
-            builder: (context) => AlertDialog(
+            builder: (ctx) => AlertDialog(
               title: const Text("Rate Vehicle Condition"),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ListTile(title: const Text("Happy 😊"), onTap: () { rating = 'happy'; Navigator.pop(context); }),
-                  ListTile(title: const Text("OK 😐"), onTap: () { rating = 'ok'; Navigator.pop(context); }),
-                  ListTile(title: const Text("Sad 😢"), onTap: () { rating = 'sad'; Navigator.pop(context); }),
-                ]
+                  ListTile(title: const Text("Happy 😊"), onTap: () { rating = 'happy'; Navigator.pop(ctx); }),
+                  ListTile(title: const Text("OK 😐"), onTap: () { rating = 'ok'; Navigator.pop(ctx); }),
+                  ListTile(title: const Text("Sad 😢"), onTap: () { rating = 'sad'; Navigator.pop(ctx); }),
+                ],
               ),
-            )
+            ),
           );
           if (rating == null) {
-            Navigator.pop(context); // Close scanner if cancelled
+            Navigator.pop(scannerContext);
             return;
           }
-          
+
+          Navigator.pop(scannerContext); // Close scanner before async
+
           try {
             final res = await http.post(
-              Uri.parse("${_baseApiUrl}vehicles/$vId/return_vehicle/"),
-              headers: _authHeaders,
+              Uri.parse("${baseUrl}vehicles/$vId/return_vehicle/"),
+              headers: authHeaders,
               body: jsonEncode({'rating': rating}),
             );
-            
-            Navigator.pop(context); // Close scanner
-            
             if (res.statusCode == 200) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vehicle returned successfully.")));
+              messenger.showSnackBar(const SnackBar(content: Text("Vehicle returned successfully.")));
               _fetchActiveTask();
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${jsonDecode(res.body)['error']}")));
+              final err = jsonDecode(res.body)['error'] ?? 'Unknown error';
+              showDialog(context: homeContext, builder: (c) => AlertDialog(title: const Text("Return Failed"), content: Text(err), actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))]));
             }
-          } catch(e) {
-             Navigator.pop(context);
+          } catch (e) {
+            messenger.showSnackBar(SnackBar(content: Text("Network error: $e")));
           }
+
         } else {
+          Navigator.pop(scannerContext); // Close scanner before async
+
           try {
             final res = await http.post(
-              Uri.parse("${_baseApiUrl}vehicles/$vId/checkout_vehicle/"),
-              headers: _authHeaders,
+              Uri.parse("${baseUrl}vehicles/$vId/checkout_vehicle/"),
+              headers: authHeaders,
             );
-            
-            Navigator.pop(context); // Close scanner
-            
             if (res.statusCode == 200) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vehicle checked out. You are now ready for dispatch.")));
+              messenger.showSnackBar(const SnackBar(content: Text("Vehicle checked out. You are ready for dispatch.")));
               _fetchActiveTask();
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${jsonDecode(res.body)['error']}")));
+              String err;
+              try {
+                err = jsonDecode(res.body)['error'] ?? "Response: ${res.body}";
+              } catch(e) {
+                err = "Status ${res.statusCode}: ${res.body}";
+              }
+              showDialog(
+                context: homeContext, 
+                builder: (c) => AlertDialog(
+                  title: const Text("Checkout Failed"), 
+                  content: Text(err), 
+                  actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))]
+                )
+              );
             }
-          } catch(e) {
-             Navigator.pop(context);
+          } catch (e) {
+            messenger.showSnackBar(SnackBar(content: Text("Network error: $e")));
           }
         }
-      }
+      },
     )));
   }
 
@@ -368,59 +391,82 @@ class _HomePageState extends State<HomePage> {
 
                     if (_isLoadingTask)
                       const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: Color(0xFF3E2723))))
-                    else if (_activeTask != null)
+                    else if (_activeTask != null && _activeTask!['is_checked_out'] == true)
                       _buildMissionCard()
+                    else if (_activeTask != null && _activeTask!['is_checked_out'] == false)
+                      Container(
+                        padding: const EdgeInsets.all(32),
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(color: const Color(0xFFEFEBE9)),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.lock_outline, size: 48, color: Color(0xFFBCAAA4)),
+                            const SizedBox(height: 16),
+                            const Text(
+                              "MISSION BLOCKED",
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 1),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "Please checkout your assigned asset to unlock dispatch instructions.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4), height: 1.5),
+                            ),
+                          ],
+                        ),
+                      )
                     else
                       _buildIdleState(),
 
                     const SizedBox(height: 32),
-                    // Fleet Action Panel
+                    // Fleet Action Panel - DYNAMIC BUTTONS
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => _handleVehicleAction(false),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFFEFEBE9)),
-                              ),
-                              child: const Column(
-                                children: [
-                                  Icon(Icons.login_rounded, color: Color(0xFF8D6E63)),
-                                  SizedBox(height: 8),
-                                  Text("CHECKOUT ASSET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 0.5)),
-                                ],
-                              ),
-                            ),
+                    if (_activeTask?['is_checked_out'] == true)
+                      GestureDetector(
+                        onTap: () => _handleVehicleAction(true),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF3E2723),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(color: const Color(0xFF3E2723).withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5)),
+                            ],
+                          ),
+                          child: const Column(
+                            children: [
+                              Icon(Icons.logout_rounded, color: Colors.white),
+                              SizedBox(height: 8),
+                              Text("RETURN ASSET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5)),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => _handleVehicleAction(true),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFFEFEBE9)),
-                              ),
-                              child: const Column(
-                                children: [
-                                  Icon(Icons.logout_rounded, color: Color(0xFF8D6E63)),
-                                  SizedBox(height: 8),
-                                  Text("RETURN ASSET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 0.5)),
-                                ],
-                              ),
-                            ),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: () => _handleVehicleAction(false),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFEFEBE9), width: 2),
+                          ),
+                          child: const Column(
+                            children: [
+                              Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF3E2723)),
+                              SizedBox(height: 8),
+                              Text("CHECKOUT ASSIGNED ASSET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 1.5)),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
               ),

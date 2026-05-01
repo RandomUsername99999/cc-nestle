@@ -44,7 +44,6 @@ class _QRScannerViewState extends State<QRScannerView> {
         return;
       }
 
-      // Default to back camera, fallback to first available
       final camera = cameras.firstWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
@@ -52,7 +51,7 @@ class _QRScannerViewState extends State<QRScannerView> {
 
       _cameraController = CameraController(
         camera,
-        ResolutionPreset.high,
+        ResolutionPreset.medium,
         enableAudio: false,
       );
 
@@ -112,7 +111,7 @@ class _QRScannerViewState extends State<QRScannerView> {
             isScanCompleted = true;
             _analysisTimer?.cancel();
             widget.onScan(code);
-            if (mounted) Navigator.pop(context);
+            // Navigation is handled by the caller inside onScan
           }
         } catch (e) {
           // No QR found in this snapshot

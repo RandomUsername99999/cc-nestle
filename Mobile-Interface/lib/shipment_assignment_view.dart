@@ -174,6 +174,10 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
       if (resp.statusCode == 200) {
         _acceptanceTimer?.cancel();
         _fetchAssignment();
+      } else {
+        final body = jsonDecode(resp.body);
+        final msg = body['error'] ?? "Failed to accept mission.";
+        _showError(msg);
       }
     } catch (e) {
       _showError("Acceptance Failure: $e");
