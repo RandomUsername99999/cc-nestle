@@ -1069,10 +1069,14 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             target_id = user.user_id if user.is_authenticated else int(user_id_fallback)
             driver = Driver.objects.get(employee__user__user_id=target_id)
                 
+            assignment = VehicleAssignment.objects.filter(driver=driver, status='active').first()
+            is_checked_out = assignment.is_checked_out if assignment else False
+
             shipment = Shipment.objects.filter(driver=driver, status__in=['dispatched', 'accepted', 'in_transit']).first()
             if shipment:
                 data = ShipmentSerializer(shipment).data
                 data['assignment_type'] = 'outbound'
+                data['is_checked_out'] = is_checked_out
                 return Response(data)
                 
             # Check for Inbound Assignment
@@ -1086,19 +1090,19 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             if inbound_assignment:
                 data = AssignmentDetailSerializer(inbound_assignment).data
                 data['assignment_type'] = 'inbound'
+                data['is_checked_out'] = is_checked_out
                 return Response(data)
 
             # Fallback: Just return vehicle info if assigned via VehicleAssignment
-            from .models import VehicleAssignment
-            assignment = VehicleAssignment.objects.filter(driver=driver, status='active').first()
             if assignment and assignment.vehicle:
                 return Response({
                     "vehicle_details": VehicleSerializer(assignment.vehicle).data,
                     "assignment_type": "none",
-                    "status": "idle"
+                    "status": "idle",
+                    "is_checked_out": is_checked_out
                 })
 
-            return Response({'detail': 'No active manifest or vehicle assigned.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': 'No active manifest or vehicle assigned.', 'is_checked_out': False}, status=status.HTTP_404_NOT_FOUND)
 
         except Exception as e:
             import traceback

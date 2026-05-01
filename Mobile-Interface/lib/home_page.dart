@@ -204,7 +204,10 @@ class _HomePageState extends State<HomePage> {
               ),
             )
           );
-          if (rating == null) return;
+          if (rating == null) {
+            Navigator.pop(context); // Close scanner if cancelled
+            return;
+          }
           
           try {
             final res = await http.post(
@@ -212,26 +215,36 @@ class _HomePageState extends State<HomePage> {
               headers: _authHeaders,
               body: jsonEncode({'rating': rating}),
             );
+            
+            Navigator.pop(context); // Close scanner
+            
             if (res.statusCode == 200) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vehicle returned.")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vehicle returned successfully.")));
               _fetchActiveTask();
             } else {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${jsonDecode(res.body)['error']}")));
             }
-          } catch(e) {}
+          } catch(e) {
+             Navigator.pop(context);
+          }
         } else {
           try {
             final res = await http.post(
               Uri.parse("${_baseApiUrl}vehicles/$vId/checkout_vehicle/"),
               headers: _authHeaders,
             );
+            
+            Navigator.pop(context); // Close scanner
+            
             if (res.statusCode == 200) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vehicle checked out.")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vehicle checked out. You are now ready for dispatch.")));
               _fetchActiveTask();
             } else {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${jsonDecode(res.body)['error']}")));
             }
-          } catch(e) {}
+          } catch(e) {
+             Navigator.pop(context);
+          }
         }
       }
     )));
@@ -312,6 +325,28 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ],
                               ),
+                              if (_activeTask?['is_checked_out'] == true) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.green.withOpacity(0.2)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check_circle, size: 10, color: Colors.green),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        "READY FOR DISPATCH / ASSET IN POSSESSION",
+                                        style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.green, letterSpacing: 0.5),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
