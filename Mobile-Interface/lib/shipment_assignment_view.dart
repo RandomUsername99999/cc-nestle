@@ -406,7 +406,11 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
   // --- STAGE 3: TRANSIT / DELIVERY FLOW ---
   Widget _buildTransitStage() {
     final allStops = _data!['stops'] as List;
-    final pendingStops = allStops.where((s) => s['status'] != 'delivered' && s['status'] != 'delivery_failed').toList();
+    final pendingStops = allStops.where((s) {
+      final status = (s['status'] ?? '').toString().toLowerCase();
+      debugPrint("STOP ID ${s['order_id']} STATUS: $status");
+      return status != 'delivered' && status != 'delivery_failed';
+    }).toList();
     
     return Column(
       children: [

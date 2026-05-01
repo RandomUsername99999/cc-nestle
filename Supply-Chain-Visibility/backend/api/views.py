@@ -826,13 +826,11 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             if not shipment:
                  return Response({'error': 'No active assignment'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Use select_related to get the latest Order objects linked to this shipment
-            order_mappings = ShipmentOrder.objects.filter(shipment=shipment).select_related('order')
-            # Ensure we have fresh data from the DB for every order
-            orders = []
-            for m in order_mappings:
-                m.order.refresh_from_db()
-                orders.append(m.order)
+            from .models import Order
+            # Fetch IDs and then fetch fresh Order objects directly to bypass any caching
+            order_ids = list(ShipmentOrder.objects.filter(shipment=shipment).values_list('order__order_id', flat=True))
+            orders = list(Order.objects.filter(order_id__in=order_ids))
+            
             if not orders:
                  return Response({'error': 'No orders in shipment'}, status=status.HTTP_404_NOT_FOUND)
 
