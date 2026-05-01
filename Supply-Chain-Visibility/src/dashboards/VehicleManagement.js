@@ -8,6 +8,33 @@ import VehicleAssignments from './VehicleAssignments';
 import { QRCodeSVG } from 'qrcode.react';
 
 function QRCodePopup({ vehicle, onClose }) {
+    const handlePrint = () => {
+        const svg = document.getElementById('qr-svg-container').innerHTML;
+        const printWindow = window.open('', '', 'width=600,height=600');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Print QR Code</title>
+                    <style>
+                        body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: monospace; text-align: center; }
+                        h2 { margin: 0; font-size: 48px; letter-spacing: 2px; }
+                        p { margin: 10px 0 40px 0; font-size: 18px; color: #555; text-transform: uppercase; }
+                        svg { width: 400px; height: 400px; }
+                    </style>
+                </head>
+                <body>
+                    <h2>${vehicle.plate_number}</h2>
+                    <p>${vehicle.vehicle_type || 'VEHICLE'} - ${vehicle.make_model || 'ASSET'}</p>
+                    ${svg}
+                    <script>
+                        setTimeout(() => { window.print(); window.close(); }, 250);
+                    </script>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
+
     return (
         <div className="fixed inset-0 bg-[#3E2723]/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
             <div className="bg-white p-8 rounded-[32px] shadow-2xl w-full max-w-sm border border-coffee-100 flex flex-col items-center text-center relative">
@@ -18,7 +45,7 @@ function QRCodePopup({ vehicle, onClose }) {
                 <h2 className="text-2xl font-bold text-coffee-900 tracking-tight mb-2">Asset QR Code</h2>
                 <p className="text-sm text-coffee-500 mb-8 font-medium">Driver can scan this to checkout/return</p>
                 
-                <div className="p-4 bg-white border-2 border-coffee-100 rounded-2xl shadow-sm mb-6">
+                <div id="qr-svg-container" className="p-4 bg-white border-2 border-coffee-100 rounded-2xl shadow-sm mb-6">
                     <QRCodeSVG value={vehicle.id.toString()} size={200} level="H" />
                 </div>
                 
@@ -26,7 +53,7 @@ function QRCodePopup({ vehicle, onClose }) {
                 <p className="text-xs font-bold text-coffee-400 mt-2 uppercase tracking-widest">{vehicle.vehicle_type} - {vehicle.make_model}</p>
                 
                 <button 
-                    onClick={() => window.print()}
+                    onClick={handlePrint}
                     className="mt-8 bg-coffee-700 hover:bg-coffee-800 text-white w-full py-3 rounded-xl shadow-lg shadow-coffee-100 text-sm font-bold transition-all"
                 >
                     Print Label

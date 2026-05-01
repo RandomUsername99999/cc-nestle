@@ -1862,7 +1862,7 @@ class ReportViewSet(viewsets.ViewSet):
             from drivers.models import Driver
             
             driver = Driver.objects.get(employee__user__user_id=user_id)
-            assignments = VehicleAssignment.objects.filter(driver=driver).order_by('-assigned_at')
+            assignments = VehicleAssignment.objects.filter(driver=driver).order_by('-assignment_start_date')
             
             def content(p, w, h):
                 draw_header(p, w, h, "Driver Asset Assignment Timeline", f"Monthly Report - Driver: {driver.employee.full_name}")
@@ -1870,9 +1870,9 @@ class ReportViewSet(viewsets.ViewSet):
                 table_data = [["Vehicle Plate", "Model", "Assigned At", "Unassigned At", "Status"]]
                 for a in assignments:
                     v_info = a.vehicle.plate_number if a.vehicle else "Unknown"
-                    v_model = a.vehicle.model if a.vehicle else "N/A"
-                    assigned = a.assigned_at.strftime('%Y-%m-%d %H:%M') if a.assigned_at else "N/A"
-                    unassigned = a.unassigned_at.strftime('%Y-%m-%d %H:%M') if getattr(a, 'unassigned_at', None) else "Active"
+                    v_model = a.vehicle.make_model if a.vehicle else "N/A"
+                    assigned = a.assignment_start_date.strftime('%Y-%m-%d %H:%M') if a.assignment_start_date else "N/A"
+                    unassigned = a.assignment_end_date.strftime('%Y-%m-%d %H:%M') if getattr(a, 'assignment_end_date', None) else "Active"
                     status = a.status.upper() if hasattr(a, 'status') else "-"
                     table_data.append([v_info, v_model, assigned, unassigned, status])
                 draw_styled_table(p, 40, y, w - 80, table_data)
@@ -1893,16 +1893,16 @@ class ReportViewSet(viewsets.ViewSet):
             from vehicles.models import Vehicle
             
             vehicle = Vehicle.objects.get(vehicle_id=vehicle_id)
-            assignments = VehicleAssignment.objects.filter(vehicle=vehicle).order_by('-assigned_at')
+            assignments = VehicleAssignment.objects.filter(vehicle=vehicle).order_by('-assignment_start_date')
             
             def content(p, w, h):
                 draw_header(p, w, h, "Vehicle Usage Timeline", f"Monthly Report - Asset: {vehicle.plate_number}")
                 y = h - 120
                 table_data = [["Driver Name", "Assigned At", "Unassigned At", "Status"]]
                 for a in assignments:
-                    d_name = a.driver.employee.full_name if (a.driver and a.driver.employee) else "Unknown"
-                    assigned = a.assigned_at.strftime('%Y-%m-%d %H:%M') if a.assigned_at else "N/A"
-                    unassigned = a.unassigned_at.strftime('%Y-%m-%d %H:%M') if getattr(a, 'unassigned_at', None) else "Active"
+                    d_name = a.driver.employee.full_name if (a.driver and hasattr(a.driver, 'employee')) else "Unknown"
+                    assigned = a.assignment_start_date.strftime('%Y-%m-%d %H:%M') if a.assignment_start_date else "N/A"
+                    unassigned = a.assignment_end_date.strftime('%Y-%m-%d %H:%M') if getattr(a, 'assignment_end_date', None) else "Active"
                     status = a.status.upper() if hasattr(a, 'status') else "-"
                     table_data.append([d_name, assigned, unassigned, status])
                 draw_styled_table(p, 40, y, w - 80, table_data)
