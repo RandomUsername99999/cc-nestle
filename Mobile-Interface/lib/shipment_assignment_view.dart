@@ -87,6 +87,7 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        debugPrint("FETCHED ASSIGNMENT DATA: ${response.body}");
         setState(() {
           _data = data;
           _error = null;
@@ -424,13 +425,17 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
         ),
         
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(32),
-            itemCount: pendingStops.length,
-            itemBuilder: (context, index) {
-              final stop = pendingStops[index];
-              return _buildFieldStopCard(stop);
-            },
+          child: RefreshIndicator(
+            onRefresh: _fetchAssignment,
+            color: const Color(0xFF3E2723),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(32),
+              itemCount: pendingStops.length,
+              itemBuilder: (context, index) {
+                final stop = pendingStops[index];
+                return _buildFieldStopCard(stop);
+              },
+            ),
           ),
         ),
 
