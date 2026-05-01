@@ -328,6 +328,10 @@ class VehicleViewSet(viewsets.ModelViewSet):
             driver = Driver.objects.get(employee__user=request.user)
             assignment = VehicleAssignment.objects.filter(vehicle=vehicle, driver=driver, status='active').first()
             if assignment:
+                if assignment.is_checked_out:
+                    return Response({'success': True, 'message': 'Vehicle is already checked out.'})
+                assignment.is_checked_out = True
+                assignment.save()
                 return Response({'success': True, 'message': 'Vehicle successfully checked out.'})
             return Response({'error': 'You are not assigned to this vehicle.'}, status=400)
         except Driver.DoesNotExist:
@@ -344,8 +348,11 @@ class VehicleViewSet(viewsets.ModelViewSet):
             driver = Driver.objects.get(employee__user=request.user)
             assignment = VehicleAssignment.objects.filter(vehicle=vehicle, driver=driver, status='active').first()
             if assignment:
+                if not assignment.is_checked_out:
+                    return Response({'error': 'You cannot return a vehicle you haven\'t checked out.'}, status=400)
                 if rating:
                     assignment.rating = rating
+                assignment.is_checked_out = False
                 assignment.status = 'completed'
                 assignment.assignment_end_date = timezone.now()
                 assignment.save()
@@ -894,6 +901,25 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         shipment = self.get_object()
         if shipment.status != 'dispatched':
             return Response({'error': 'Shipment is not in a dispatchable state'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if driver has a checked-out vehicle
+        from .models import VehicleAssignment
+        from drivers.models import Driver
+        try:
+            # Identity Fallback for user
+            user = request.user
+            if not user.is_authenticated:
+                u_id = request.data.get('user_id')
+                if u_id:
+                    from .models import CustomUser
+                    user = CustomUser.objects.filter(user_id=u_id).first()
+            
+            driver = Driver.objects.get(employee__user=user)
+            active_assignment = VehicleAssignment.objects.filter(driver=driver, status='active', is_checked_out=True).first()
+            if not active_assignment:
+                return Response({'error': 'Deployment Blocked: You must checkout your assigned vehicle before accepting dispatches.'}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response({'error': f'Auth context error: {str(e)}'}, status=status.HTTP_401_UNAUTHORIZED)
         
         shipment.status = 'accepted'
         shipment.accepted_at = timezone.now()

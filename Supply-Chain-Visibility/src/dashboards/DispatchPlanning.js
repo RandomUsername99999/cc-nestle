@@ -136,15 +136,36 @@ export default function DispatchPlanning() {
       setOrders(fetchedOrders);
       
       try {
-        const sessionOrders = JSON.parse(sessionStorage.getItem('created_orders') || '[]');
-        if (sessionOrders.length > 0) {
-            const validIds = sessionOrders.filter(id => fetchedOrders.some(o => o.order_id === id));
-            if (validIds.length > 0) {
-                setSelectedOrders(validIds);
-                // Optionally remove from session if we want it to be a one-time suggestion
+        const sessionOrdersStr = sessionStorage.getItem('created_orders');
+        if (sessionOrdersStr && selectedOrders.length === 0) {
+            const sessionOrders = JSON.parse(sessionOrdersStr);
+            if (sessionOrders.length > 0) {
+                // Get valid orders that are actually in the fetched list
+                const availableSessionOrders = fetchedOrders.filter(o => sessionOrders.includes(o.order_id));
+                
+                if (availableSessionOrders.length > 0) {
+                    // Group by warehouse to respect the Single Hub Constraint
+                    const warehouseGroups = availableSessionOrders.reduce((acc, o) => {
+                        acc[o.warehouse_id] = acc[o.warehouse_id] || [];
+                        acc[o.warehouse_id].push(o.order_id);
+                        return acc;
+                    }, {});
+                    
+                    // Pick the largest group (or just the first one)
+                    const bestGroup = Object.values(warehouseGroups).sort((a, b) => b.length - a.length)[0];
+                    
+                    if (bestGroup && bestGroup.length > 0) {
+                        setSelectedOrders(bestGroup);
+                        // Clear from session storage so it doesn't re-trigger on every sync/deployment
+                        sessionStorage.removeItem('created_orders');
+                        toast.success(`Intelligence: ${bestGroup.length} recent orders auto-selected for deployment.`);
+                    }
+                }
             }
         }
-      } catch(e) {}
+      } catch(e) {
+        console.error("Session order processing failed", e);
+      }
 
       setVehicles(vehicleRes.data.filter(v => 
         v.assignedDriver && 

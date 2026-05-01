@@ -113,6 +113,7 @@ class VehicleAssignment(models.Model):
     status = models.CharField(max_length=20, default='active')
     assigned_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, db_column='assigned_by')
     rating = models.CharField(max_length=20, null=True, blank=True)
+    is_checked_out = models.BooleanField(default=False)
 
     class Meta:
         managed = True
