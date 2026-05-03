@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import api from '../api';
-import { database } from '../firebase';
+import { database, isFirebaseConfigured } from '../firebase';
 import { ref, onValue } from 'firebase/database';
 import { BiCar, BiUser, BiRefresh, BiTime, BiBox, BiMapPin, BiNavigation, BiStation } from 'react-icons/bi';
 
@@ -43,45 +43,35 @@ export default function LiveTracker() {
   useEffect(() => {
     fetchLocations();
     
-    // Listen to real-time updates from Firebase
-    const trackingRef = ref(database, 'tracking');
-    const unsubscribe = onValue(trackingRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            setVehicles(prevVehicles => {
-                const newVehicles = [...prevVehicles];
-                Object.entries(data).forEach(([shipmentId, info]) => {
-                    const current = info.current;
-                    if (!current) return;
-                    
-                    const idx = newVehicles.findIndex(v => v.driver_id === current.driver_id);
-                    if (idx !== -1) {
-                        newVehicles[idx] = {
-                            ...newVehicles[idx],
-                            lat: current.lat,
-                            lng: current.lng,
-                            timestamp: current.timestamp,
-                            status: current.active ? 'Moving' : 'Signal Lost',
-                            accuracy: current.accuracy
-                        };
-                    } else {
-                        // New driver spotted
-                        newVehicles.push({
-                            driver_id: current.driver_id,
-                            lat: current.lat,
-                            lng: current.lng,
-                            timestamp: current.timestamp,
-                            status: 'New Signal',
-                            vehicle_id: 'Locating...'
-                        });
-                    }
+    if (isFirebaseConfigured && database) {
+        const trackingRef = ref(database, 'tracking');
+        const unsubscribe = onValue(trackingRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                setVehicles(prevVehicles => {
+                    const newVehicles = [...prevVehicles];
+                    Object.entries(data).forEach(([shipmentId, info]) => {
+                        const current = info.current;
+                        if (!current) return;
+                        
+                        const idx = newVehicles.findIndex(v => v.driver_id === current.driver_id);
+                        if (idx !== -1) {
+                            newVehicles[idx] = {
+                                ...newVehicles[idx],
+                                lat: current.lat,
+                                lng: current.lng,
+                                speed: current.speed,
+                                last_updated: current.timestamp,
+                                active: current.active
+                            };
+                        }
+                    });
+                    return newVehicles;
                 });
-                return newVehicles;
-            });
-        }
-    });
-
-    return () => unsubscribe();
+            }
+        });
+        return () => unsubscribe();
+    }
   }, []);
 
   return (

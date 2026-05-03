@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, Package, MapPin, AlertCircle, CheckCircle, Clock, Calendar, ShieldAlert } from 'lucide-react';
-import { db } from '../firebase';
+import { db, isFirebaseConfigured } from '../firebase';
 import { ref, onValue } from 'firebase/database';
 import api from '../api';
 import toast from 'react-hot-toast';
@@ -12,17 +12,21 @@ const InboundProcurement = () => {
 
 
     useEffect(() => {
-        // Real-time tracking of inbound runs
-        const trackingRef = ref(db, 'inbound_tracking/');
-        const unsubscribe = onValue(trackingRef, (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                setActiveRuns(Object.entries(data).map(([id, info]) => ({ id, ...info })));
-            }
-            setIsLoading(false);
-        });
+        if (isFirebaseConfigured && db) {
+            // Real-time tracking of inbound runs
+            const trackingRef = ref(db, 'inbound_tracking/');
+            const unsubscribe = onValue(trackingRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    setActiveRuns(Object.entries(data).map(([id, info]) => ({ id, ...info })));
+                }
+                setIsLoading(false);
+            });
 
-        return () => unsubscribe();
+            return () => unsubscribe();
+        } else {
+            setIsLoading(false);
+        }
     }, []);
 
     return (

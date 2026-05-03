@@ -14,15 +14,18 @@ const firebaseConfig = {
 };
 
 // Safety check to prevent app-wide crash if firebase is unconfigured
-const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
+export const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY" && firebaseConfig.apiKey !== "";
 
-let database;
-if (isConfigured) {
-    const app = initializeApp(firebaseConfig);
-    database = getDatabase(app);
+let database = null;
+if (isFirebaseConfigured) {
+    try {
+        const app = initializeApp(firebaseConfig);
+        database = getDatabase(app);
+    } catch (e) {
+        console.error("Firebase initialization failed:", e);
+    }
 } else {
     console.warn("Firebase is not configured. Real-time tracking will be unavailable.");
-    database = { ref: () => ({ onValue: () => () => {} }) }; // No-op fallback
 }
 
 export { database };

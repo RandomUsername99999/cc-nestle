@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../api";
-import { db } from "../firebase";
+import { db, isFirebaseConfigured } from "../firebase";
 import { ref, onValue } from "firebase/database";
 import { 
     BiSearch, BiCube, BiFilterAlt, BiRefresh, BiIntersect,
@@ -77,14 +77,17 @@ export default function ManagerDashboard() {
 
     useEffect(() => {
         fetchData();
-        const inboundRef = ref(db, 'inbound_tracking/');
-        const unsub = onValue(inboundRef, (snap) => {
-            if (snap.exists()) {
-                const data = snap.val();
-                setActiveInbound(Object.entries(data).map(([id, val]) => ({ id, ...val })));
-            }
-        });
-        return () => unsub();
+        
+        if (isFirebaseConfigured && db) {
+            const inboundRef = ref(db, 'inbound_tracking/');
+            const unsub = onValue(inboundRef, (snap) => {
+                if (snap.exists()) {
+                    const data = snap.val();
+                    setActiveInbound(Object.entries(data).map(([id, val]) => ({ id, ...val })));
+                }
+            });
+            return () => unsub();
+        }
     }, []);
 
     const fetchData = async () => {
