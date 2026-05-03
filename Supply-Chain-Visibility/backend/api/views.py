@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -63,18 +63,25 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             
             return Response(response_data, status=status.HTTP_200_OK)
             
-        except AuthenticationFailed:
+        except (AuthenticationFailed, serializers.ValidationError) as e:
             # Audit Log: Failed login
             from .models import AuditLog
             AuditLog.objects.create(
                 user=user if user else None,
                 action='LOGIN_FAILED',
                 resource_type='Session',
-                details=f"Failed login attempt for identifier '{identifier}'."
+                details=f"Failed login attempt for identifier '{identifier}'. Error: {str(e)}"
             )
-            if user:
-                return Response({"detail": "Incorrect password. Please verify your credentials."}, status=status.HTTP_401_UNAUTHORIZED)
-            return Response({"detail": "No account associated with this username or email was found."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Extract detail message if it's a ValidationError
+            error_detail = e.detail if hasattr(e, 'detail') else str(e)
+            if isinstance(error_detail, dict):
+                error_detail = error_detail.get('detail', error_detail)
+            
+            return Response(
+                {"detail": error_detail}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         except Exception as e:
             import traceback
             print(traceback.format_exc())
