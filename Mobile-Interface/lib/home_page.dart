@@ -180,97 +180,115 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _handleVehicleAction(bool isReturn) {
-    // Capture context-dependent objects BEFORE pushing the scanner
+  void _handleVehicleAction(bool isReturn) async {
+    final vehicle = _activeTask?['vehicle_details'];
+    final vId = vehicle?['id'];
+    
+    if (vId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No vehicle associated with this mission."))
+      );
+      return;
+    }
+
     final messenger = ScaffoldMessenger.of(context);
     final authHeaders = Map<String, String>.from(_authHeaders);
     final baseUrl = _baseApiUrl;
     final homeContext = context;
 
-    Navigator.push(context, MaterialPageRoute(builder: (scannerContext) => QRScannerView(
-      title: isReturn ? "Scan to Return Asset" : "Scan to Checkout Asset",
-      onScan: (code) async {
-        final vId = code.replaceAll(RegExp(r'[^0-9]'), '');
-        if (vId.isEmpty) {
-          Navigator.pop(scannerContext);
-          messenger.showSnackBar(const SnackBar(content: Text("Invalid QR code scanned.")));
-          return;
-        }
+    if (isReturn) {
+      String? rating;
+      bool? confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Return Vehicle"),
+          content: const Text("Are you sure you want to return this vehicle to the warehouse?"),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL")),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("PROCEED")),
+          ],
+        ),
+      );
 
-        if (isReturn) {
-          String? rating;
-          await showDialog(
-            context: scannerContext,
-            barrierDismissible: false,
-            builder: (ctx) => AlertDialog(
-              title: const Text("Rate Vehicle Condition"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(title: const Text("Happy 😊"), onTap: () { rating = 'happy'; Navigator.pop(ctx); }),
-                  ListTile(title: const Text("OK 😐"), onTap: () { rating = 'ok'; Navigator.pop(ctx); }),
-                  ListTile(title: const Text("Sad 😢"), onTap: () { rating = 'sad'; Navigator.pop(ctx); }),
-                ],
-              ),
-            ),
-          );
-          if (rating == null) {
-            Navigator.pop(scannerContext);
-            return;
-          }
+      if (confirm != true) return;
 
-          Navigator.pop(scannerContext); // Close scanner before async
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Rate Vehicle Condition"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(title: const Text("Happy 😊"), onTap: () { rating = 'happy'; Navigator.pop(ctx); }),
+              ListTile(title: const Text("OK 😐"), onTap: () { rating = 'ok'; Navigator.pop(ctx); }),
+              ListTile(title: const Text("Sad 😢"), onTap: () { rating = 'sad'; Navigator.pop(ctx); }),
+            ],
+          ),
+        ),
+      );
 
-          try {
-            final res = await http.post(
-              Uri.parse("${baseUrl}vehicles/$vId/return_vehicle/"),
-              headers: authHeaders,
-              body: jsonEncode({'rating': rating}),
-            );
-            if (res.statusCode == 200) {
-              messenger.showSnackBar(const SnackBar(content: Text("Vehicle returned successfully.")));
-              _fetchActiveTask();
-            } else {
-              final err = jsonDecode(res.body)['error'] ?? 'Unknown error';
-              showDialog(context: homeContext, builder: (c) => AlertDialog(title: const Text("Return Failed"), content: Text(err), actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))]));
-            }
-          } catch (e) {
-            messenger.showSnackBar(SnackBar(content: Text("Network error: $e")));
-          }
+      if (rating == null) return;
 
+      try {
+        final res = await http.post(
+          Uri.parse("${baseUrl}vehicles/$vId/return_vehicle/"),
+          headers: authHeaders,
+          body: jsonEncode({'rating': rating}),
+        );
+        if (res.statusCode == 200) {
+          messenger.showSnackBar(const SnackBar(content: Text("Vehicle returned successfully.")));
+          _fetchActiveTask();
         } else {
-          Navigator.pop(scannerContext); // Close scanner before async
-
-          try {
-            final res = await http.post(
-              Uri.parse("${baseUrl}vehicles/$vId/checkout_vehicle/"),
-              headers: authHeaders,
-            );
-            if (res.statusCode == 200) {
-              messenger.showSnackBar(const SnackBar(content: Text("Vehicle checked out. You are ready for dispatch.")));
-              _fetchActiveTask();
-            } else {
-              String err;
-              try {
-                err = jsonDecode(res.body)['error'] ?? "Response: ${res.body}";
-              } catch(e) {
-                err = "Status ${res.statusCode}: ${res.body}";
-              }
-              showDialog(
-                context: homeContext, 
-                builder: (c) => AlertDialog(
-                  title: const Text("Checkout Failed"), 
-                  content: Text(err), 
-                  actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))]
-                )
-              );
-            }
-          } catch (e) {
-            messenger.showSnackBar(SnackBar(content: Text("Network error: $e")));
-          }
+          final err = jsonDecode(res.body)['error'] ?? 'Unknown error';
+          showDialog(context: homeContext, builder: (c) => AlertDialog(title: const Text("Return Failed"), content: Text(err), actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))]));
         }
-      },
-    )));
+      } catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text("Network error: $e")));
+      }
+    } else {
+      bool? confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Checkout Vehicle"),
+          content: Text("Do you confirm you are taking possession of vehicle ${vehicle?['plate_number']}?"),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL")),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("CONFIRM CHECKOUT")),
+          ],
+        ),
+      );
+
+      if (confirm != true) return;
+
+      try {
+        final res = await http.post(
+          Uri.parse("${baseUrl}vehicles/$vId/checkout_vehicle/"),
+          headers: authHeaders,
+        );
+        if (res.statusCode == 200) {
+          messenger.showSnackBar(const SnackBar(content: Text("Vehicle checked out. You are ready for dispatch.")));
+          _fetchActiveTask();
+        } else {
+          String err;
+          try {
+            err = jsonDecode(res.body)['error'] ?? "Response: ${res.body}";
+          } catch(e) {
+            err = "Status ${res.statusCode}: ${res.body}";
+          }
+          showDialog(
+            context: homeContext, 
+            builder: (c) => AlertDialog(
+              title: const Text("Checkout Failed"), 
+              content: Text(err), 
+              actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))]
+            )
+          );
+        }
+      } catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text("Network error: $e")));
+      }
+    }
   }
 
   @override
@@ -401,7 +419,7 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 16),
                     if (_activeTask != null)
                       GestureDetector(
-                        onTap: () => _handleVehicleAction(true),
+                        onTap: () => _handleVehicleAction(_activeTask?['is_checked_out'] == true),
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 20),
@@ -412,11 +430,17 @@ class _HomePageState extends State<HomePage> {
                               BoxShadow(color: const Color(0xFF3E2723).withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5)),
                             ],
                           ),
-                          child: const Column(
+                          child: Column(
                             children: [
-                              Icon(Icons.logout_rounded, color: Colors.white),
-                              SizedBox(height: 8),
-                              Text("RETURN ASSET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5)),
+                              Icon(
+                                _activeTask?['is_checked_out'] == true ? Icons.logout_rounded : Icons.login_rounded, 
+                                color: Colors.white
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _activeTask?['is_checked_out'] == true ? "RETURN ASSET" : "CHECKOUT ASSET", 
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5)
+                              ),
                             ],
                           ),
                         ),

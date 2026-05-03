@@ -100,7 +100,7 @@ export default function DeliveryAnalytics() {
                         </div>
                     </div>
                     <div className="h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minHeight={0} debounce={50}>
                             <LineChart data={trends}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                 <XAxis 
@@ -130,7 +130,7 @@ export default function DeliveryAnalytics() {
                     <h3 className="text-lg font-black text-coffee-900 mb-8">Delivery Exception Analysis</h3>
                     <div className="flex flex-col md:flex-row items-center gap-8">
                         <div className="h-[250px] w-full md:w-1/2">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minHeight={0} debounce={50}>
                                 <PieChart>
                                     <Pie
                                         data={failures}

@@ -851,7 +851,7 @@ class ShipmentViewSet(viewsets.ModelViewSet):
                 
             shipment = Shipment.objects.filter(driver=driver, status__in=['dispatched', 'accepted', 'in_transit']).order_by('-created_at').first()
             if not shipment:
-                 return Response({'error': 'No active assignment'}, status=status.HTTP_404_NOT_FOUND)
+                 return Response({'error': 'No active assignment'}, status=status.HTTP_200_OK)
 
             from .models import Order
             # Fetch IDs and then fetch fresh Order objects directly to bypass any caching
@@ -859,7 +859,7 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             orders = list(Order.objects.filter(order_id__in=order_ids))
             
             if not orders:
-                 return Response({'error': 'No orders in shipment'}, status=status.HTTP_404_NOT_FOUND)
+                 return Response({'error': 'No orders in shipment'}, status=status.HTTP_200_OK)
 
             first_order = orders[0]
             origin = {
