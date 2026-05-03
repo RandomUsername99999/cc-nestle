@@ -4,7 +4,7 @@ from inbound.models import SupplierDeliveryManifest, SpecialHandlingType
 COOLING_CAPABLE_TYPES    = ['refrigerated', 'reefer']
 FREEZER_CAPABLE_TYPES    = ['freezer']
 HAZMAT_CAPABLE_TYPES     = ['hazmat_certified']
-CAPACITY_BUFFER_FACTOR   = 0.90   # use max 90% of vehicle capacity
+CAPACITY_BUFFER_FACTOR   = 1.0   # use max 100% of vehicle capacity
 
 def find_eligible_vehicles(manifest: SupplierDeliveryManifest) -> list:
     """
@@ -56,11 +56,11 @@ def _check_special_handling(vehicle, manifest) -> bool:
         return True
 
     if handling == SpecialHandlingType.COOLING:
-        return vehicle.vehicle_type in COOLING_CAPABLE_TYPES + FREEZER_CAPABLE_TYPES
+        return vehicle.is_refrigerated or vehicle.vehicle_type in COOLING_CAPABLE_TYPES + FREEZER_CAPABLE_TYPES
 
     if handling == SpecialHandlingType.FROZEN:
         # Check temperature range fits within vehicle's min/max
-        if vehicle.vehicle_type not in FREEZER_CAPABLE_TYPES:
+        if not vehicle.is_refrigerated and vehicle.vehicle_type not in FREEZER_CAPABLE_TYPES:
             return False
             
         manifest_min = float(manifest.temperature_min_c) if manifest.temperature_min_c is not None else None

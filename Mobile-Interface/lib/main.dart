@@ -79,9 +79,20 @@ class MyApp extends StatelessWidget {
                 return MaterialPageRoute(builder: (_) => CompletionSummaryScreen(assignmentId: assignmentId));
             }
             if (settings.name == '/driver/dashboard') {
-                // We fallback to a dummy user if not found, though realistically this shouldn't happen 
-                // in this flow as userId comes from the FutureBuilder above.
-                return MaterialPageRoute(builder: (_) => const LoginPage()); 
+                return MaterialPageRoute(
+                  builder: (_) => FutureBuilder<int?>(
+                    future: SharedPreferences.getInstance().then((p) => p.getInt('userId')),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+                      }
+                      if (snapshot.data != null) {
+                        return HomePage(userId: snapshot.data!);
+                      }
+                      return const LoginPage();
+                    },
+                  ),
+                );
             }
             return null;
           },

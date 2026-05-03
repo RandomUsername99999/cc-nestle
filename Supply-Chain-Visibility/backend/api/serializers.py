@@ -207,7 +207,7 @@ class VehicleSerializer(serializers.ModelSerializer):
     def get_assignedDriver(self, obj):
         active_assignment = obj.assignments.filter(status='active').first()
         if active_assignment and active_assignment.driver and hasattr(active_assignment.driver, 'employee'):
-            return active_assignment.driver.employee.user.id
+            return active_assignment.driver.employee.user.user_id
         return None
 
     def get_driver_name(self, obj):

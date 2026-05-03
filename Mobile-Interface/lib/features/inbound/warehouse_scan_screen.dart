@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WarehouseScanScreen extends StatefulWidget {
   final String assignmentId;
@@ -10,9 +13,46 @@ class WarehouseScanScreen extends StatefulWidget {
 
 class _WarehouseScanState extends State<WarehouseScanScreen> {
   
-  void _onScanSuccess() {
-    // API Call to /assignments/:id/scan-warehouse/
-    Navigator.pushReplacementNamed(context, '/inbound/summary', arguments: widget.assignmentId);
+  bool _isSyncing = false;
+
+  void _onScanSuccess() async {
+    setState(() => _isSyncing = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+      final baseUrl = "https://UnderpaidWorker.pythonanywhere.com/api/";
+
+      // Note: In simulation we pass a dummy token that verify_warehouse_inbound_qr will handle
+      // Or we can pass "WH-${widget.assignmentId}"
+      final response = await http.post(
+        Uri.parse("${baseUrl}inbound/assignments/${widget.assignmentId}/scan-warehouse/"),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'qr_token': "WH-${widget.assignmentId}"}),
+      );
+
+      if (response.statusCode == 200) {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/inbound/summary', arguments: widget.assignmentId);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Warehouse sync failed: ${response.statusCode}'))
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Connection error: $e'))
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
   }
 
   @override
