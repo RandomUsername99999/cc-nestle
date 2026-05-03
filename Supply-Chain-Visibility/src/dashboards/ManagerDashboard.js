@@ -90,22 +90,27 @@ export default function ManagerDashboard() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [oRes, sRes, pRes, tRes, eRes, trRes] = await Promise.all([
-                api.get('orders/'), 
-                api.get('shipments/'),
-                api.get('pods/'),
-                api.get('drivers/trip-logs/'),
-                api.get('exceptions/'),
-                api.get('warehouses/transfers/')
+            const fetchEndpoint = async (path, setter) => {
+                try {
+                    const res = await api.get(path);
+                    setter(res.data);
+                } catch (e) {
+                    console.error(`Failed to fetch ${path}:`, e);
+                    // We don't toast for every failure to avoid spam, 
+                    // but we ensure the app doesn't crash.
+                }
+            };
+
+            await Promise.all([
+                fetchEndpoint('orders/', setOrders),
+                fetchEndpoint('shipments/', setShipments),
+                fetchEndpoint('pods/', setPods),
+                fetchEndpoint('drivers/trip-logs/', setTripLogs),
+                fetchEndpoint('exceptions/', setExceptions),
+                fetchEndpoint('warehouses/transfers/', setTransfers)
             ]);
-            setOrders(oRes.data);
-            setShipments(sRes.data);
-            setPods(pRes.data);
-            setTripLogs(tRes.data);
-            setExceptions(eRes.data);
-            setTransfers(trRes.data);
         } catch (err) {
-            toast.error("Bridge Connection Failure");
+            toast.error("Partial System Synchronization Failure");
         } finally {
             setLoading(false);
         }

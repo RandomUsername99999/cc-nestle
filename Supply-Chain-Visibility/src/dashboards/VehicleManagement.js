@@ -1,3 +1,13 @@
+import { useState, useEffect } from "react";
+import api from "../api";
+import { BiPlus, BiPencil, BiTrash, BiTransferAlt, BiSearch, BiCalendar, BiPackage, BiBadgeCheck, BiInfoCircle, BiDownload, BiQrScan } from "react-icons/bi";
+import { GiTruck, GiWeight, GiResize } from "react-icons/gi";
+import { Activity, Fuel } from "lucide-react";
+import toast from 'react-hot-toast';
+import ConfirmationModal from '../UIComponents/ConfirmationModal';
+import VehicleAssignments from './VehicleAssignments';
+import { QRCodeSVG } from 'qrcode.react';
+
 function VehicleDetailPopup({ vehicle, onClose, onRefresh }) {
     const [activeSubTab, setActiveSubTab] = useState('INFO'); // INFO, MAINTENANCE, FUEL
     
@@ -45,13 +55,13 @@ function VehicleInfoTab({ vehicle }) {
             <div className="space-y-6">
                 <DetailItem label="Asset Type" value={vehicle.vehicle_type} icon={<GiTruck />} />
                 <DetailItem label="Purchase Date" value={vehicle.purchase_date || 'N/A'} icon={<BiCalendar />} />
-                <DetailItem label="Current Mileage" value={`${vehicle.current_mileage || 0} KM`} icon={<Activity />} />
-                <DetailItem label="Fuel Consumption" value={`${vehicle.fuel_consumption_rate || 0} L/100km`} icon={<Fuel />} />
+                <DetailItem label="Current Mileage" value={`${vehicle.current_mileage || 0} KM`} icon={<Activity size={18} />} />
+                <DetailItem label="Fuel Consumption" value={`${vehicle.fuel_consumption_rate || 0} L/100km`} icon={<Fuel size={18} />} />
             </div>
             <div className="space-y-6">
                 <DetailItem label="Capacity" value={`${vehicle.capacity} KG / ${vehicle.volume} m³`} icon={<GiWeight />} />
                 <DetailItem label="Next Service" value={vehicle.next_service_date || 'Scheduled by distance'} icon={<BiCalendar />} />
-                <DetailItem label="Service Threshold" value={`${vehicle.next_service_mileage || 'N/A'} KM`} icon={<Activity />} />
+                <DetailItem label="Service Threshold" value={`${vehicle.next_service_mileage || 'N/A'} KM`} icon={<Activity size={18} />} />
                 <DetailItem label="Refrigeration" value={vehicle.is_refrigerated ? 'Equipped (Cold Chain)' : 'Standard'} icon={<span>❄️</span>} />
             </div>
         </div>
@@ -207,7 +217,7 @@ function DetailItem({ label, value, icon }) {
     );
 }
 
-export default function VehicleManagement() {
+function QRCodePopup({ vehicle, onClose }) {
     const handlePrint = () => {
         const svg = document.getElementById('qr-svg-container').innerHTML;
         const printWindow = window.open('', '', 'width=600,height=600');

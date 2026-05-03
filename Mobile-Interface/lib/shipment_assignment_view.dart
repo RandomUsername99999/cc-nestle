@@ -272,7 +272,7 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
         child: Column(
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.between,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text("Recipient Signature", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
                 IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
