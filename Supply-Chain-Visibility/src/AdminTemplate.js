@@ -19,6 +19,7 @@ const navItemsData = [
   { key: "supplierDeliveries", icon: <GiPathDistance />, link: "/admin/supplier-deliveries" },
   { key: "search", icon: <BiSearch />, link: "/admin/search" },
   { key: "reports", icon: <MdMap />, link: "/admin/reports" },
+  { key: "settings", icon: <SlSettings />, link: "/admin/settings" },
 ];
 
 function AdminTemplate({ userRole, userName, onLogout }) {
@@ -188,6 +189,8 @@ function VerticalNavbar({ sidebarOpen, userRole }) {
   }).sort((a, b) => {
     const countA = clickCounts[a.key] || 0;
     const countB = clickCounts[b.key] || 0;
+    if (a.key === 'settings') return 1;
+    if (b.key === 'settings') return -1;
     return countB - countA;
   });
 

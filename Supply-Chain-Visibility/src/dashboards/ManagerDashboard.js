@@ -10,9 +10,10 @@ import {
     Truck, Package, MapPin, AlertCircle, CheckCircle, 
     Clock, Calendar, ShieldAlert, BarChart3, Activity,
     Radar, FileText, Download, Fuel, Navigation, Warehouse,
-    ArrowRightLeft, Percent, ClipboardList
+    ArrowRightLeft, Percent, ClipboardList, TrendingUp as TrendingUpIcon
 } from "lucide-react";
 import toast from "react-hot-toast";
+import DeliveryAnalytics from "./DeliveryAnalytics";
 
 const STATUS_CONFIG = {
     pending:    { bg: 'bg-amber-50',   text: 'text-amber-700',  border: 'border-amber-100',  dot: 'bg-amber-400',   label: 'Pending' },
@@ -202,6 +203,7 @@ export default function ManagerDashboard() {
             <div className="flex flex-wrap items-center gap-2 mb-10 bg-slate-100/50 p-1.5 rounded-3xl w-max border border-slate-100">
                 {[
                     { id: 'overview', label: 'Operations Feed', icon: Activity },
+                    { id: 'analytics', label: 'Delivery Intelligence', icon: BarChart3 },
                     { id: 'documents', label: 'Management Docs', icon: FileText },
                     { id: 'trips', label: 'Driver Logs', icon: Navigation },
                     { id: 'inventory', label: 'Stock Transfers', icon: ArrowRightLeft },
@@ -216,6 +218,8 @@ export default function ManagerDashboard() {
                     </button>
                 ))}
             </div>
+
+            {activeView === 'analytics' && <DeliveryAnalytics />}
 
             {activeView === 'overview' && (
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">

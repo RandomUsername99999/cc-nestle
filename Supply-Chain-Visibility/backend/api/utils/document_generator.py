@@ -199,3 +199,58 @@ def draw_styled_table(p, x, y, width, data, header_color='#1e293b'):
     t.drawOn(p, x, y - table_height)
     return y - table_height - 30
 
+def draw_signature(p, x, y, base64_str, width=150, height=60):
+    """ Decode base64 signature and draw it on the canvas. """
+    if not base64_str:
+        return y
+    
+    import base64
+    from io import BytesIO
+    from reportlab.lib.utils import ImageReader
+    
+    try:
+        # Handle potential data:image/png;base64, prefix
+        if ',' in base64_str:
+            base64_str = base64_str.split(',')[1]
+            
+        img_data = base64.b64decode(base64_str)
+        img = ImageReader(BytesIO(img_data))
+        
+        # Background for signature
+        p.setFillColor(colors.whitesmoke)
+        p.roundRect(x, y - height, width, height, 4, stroke=1, fill=1)
+        
+        p.drawImage(img, x + 5, y - height + 5, width=width - 10, height=height - 10, mask='auto')
+        return y - height - 10
+    except Exception as e:
+        print(f"Failed to draw signature: {e}")
+        return y
+
+def draw_delivery_map(p, x, y, lat, lng, width=200, height=120):
+    """ Draw a static Google Map image for the delivery location. """
+    # Placeholder API Key - User should replace with their own
+    API_KEY = "YOUR_GOOGLE_MAPS_API_KEY"
+    
+    if not lat or not lng:
+        return y
+        
+    static_map_url = f"https://maps.googleapis.com/maps/api/staticmap?center={lat},{lng}&zoom=15&size={width}x{height}&markers=color:red%7C{lat},{lng}&key={API_KEY}"
+    
+    try:
+        p.setStrokeColor(colors.HexColor('#e2e8f0'))
+        p.roundRect(x, y - height, width, height, 8, stroke=1, fill=0)
+        
+        # If API_KEY is placeholder, this will fail or show error image
+        p.drawImage(static_map_url, x, y - height, width=width, height=height, mask='auto')
+        return y - height - 10
+    except Exception:
+        # Fallback stylized placeholder
+        p.setFillColor(colors.HexColor('#f8fafc'))
+        p.roundRect(x, y - height, width, height, 8, stroke=1, fill=1)
+        p.setFillColor(colors.HexColor('#94a3b8'))
+        p.setFont("Helvetica-Bold", 8)
+        p.drawCentredString(x + width/2, y - height/2, "GEOSPATIAL PROOF")
+        p.setFont("Helvetica", 7)
+        p.drawCentredString(x + width/2, y - height/2 - 12, f"LAT: {lat} / LNG: {lng}")
+        return y - height - 10
+

@@ -137,7 +137,7 @@ export default function LiveTracker() {
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 group hover:border-indigo-100 transition-colors">
                     <div className="flex items-center gap-3 mb-2">
                         <BiBox className="text-slate-400 text-xl group-hover:text-indigo-500 transition-colors" />
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Manifest</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Outbound</p>
                     </div>
                     <p className="text-sm font-bold text-slate-700 pl-8">{selectedVehicle.shipment_info || 'Idle - No active route'}</p>
                   </div>
@@ -234,7 +234,7 @@ export default function LiveTracker() {
                       <BiBox />
                     </div>
                     <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Live Manifest</p>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Live Outbound</p>
                       <p className="text-[11px] font-bold text-emerald-600 leading-tight">{vehicle.shipment_info || 'Idle - No Route'}</p>
                     </div>
                   </div>

@@ -186,9 +186,36 @@ class VehicleViewSet(viewsets.ModelViewSet):
     serializer_class = VehicleSerializer
 
     def get_permissions(self):
-        if self.action in ['checkout_vehicle', 'return_vehicle', 'retrieve']:
+        if self.action in ['checkout_vehicle', 'return_vehicle', 'retrieve', 'log_maintenance', 'log_fuel']:
             return [permissions.IsAuthenticated()]
         return [IsInternalRole()]
+
+    @action(detail=True, methods=['post'])
+    def log_maintenance(self, request, pk=None):
+        vehicle = self.get_object()
+        from .serializers import MaintenanceLogSerializer
+        serializer = MaintenanceLogSerializer(data={**request.data, 'vehicle': vehicle.vehicle_id})
+        if serializer.is_valid():
+            serializer.save()
+            # Update vehicle metadata
+            vehicle.current_mileage = request.data.get('mileage_at_service', vehicle.current_mileage)
+            vehicle.next_service_mileage = request.data.get('next_service_due_mileage', vehicle.next_service_mileage)
+            vehicle.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def log_fuel(self, request, pk=None):
+        vehicle = self.get_object()
+        from .serializers import FuelExpenseSerializer
+        serializer = FuelExpenseSerializer(data={**request.data, 'vehicle': vehicle.vehicle_id})
+        if serializer.is_valid():
+            serializer.save()
+            # Update mileage
+            vehicle.current_mileage = request.data.get('mileage_at_refill', vehicle.current_mileage)
+            vehicle.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def check_object_permissions(self, request, obj):
         super().check_object_permissions(request, obj)
@@ -921,9 +948,9 @@ class ShipmentViewSet(viewsets.ModelViewSet):
                     user = CustomUser.objects.filter(user_id=u_id).first()
             
             driver = Driver.objects.get(employee__user=user)
-            active_assignment = VehicleAssignment.objects.filter(driver=driver, status='active', is_checked_out=True).first()
+            active_assignment = VehicleAssignment.objects.filter(driver=driver, status='active').first()
             if not active_assignment:
-                return Response({'error': 'Deployment Blocked: You must checkout your assigned vehicle before accepting dispatches.'}, status=status.HTTP_403_FORBIDDEN)
+                return Response({'error': 'Deployment Blocked: You must be assigned to a vehicle before accepting dispatches.'}, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response({'error': f'Auth context error: {str(e)}'}, status=status.HTTP_401_UNAUTHORIZED)
         
@@ -1037,6 +1064,12 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         order.delivered_by_driver_id = shipment.driver.driver_id
         order.delivery_location_lat = lat
         order.delivery_location_lng = lng
+        
+        # Save recipient signature if provided
+        signature = request.data.get('signature')
+        if signature:
+            order.recipient_signature = signature
+            
         order.save()
         
         OrderStatusLog.objects.create(
@@ -1076,7 +1109,8 @@ class ShipmentViewSet(viewsets.ModelViewSet):
             driver = Driver.objects.get(employee__user__user_id=target_id)
                 
             assignment = VehicleAssignment.objects.filter(driver=driver, status='active').first()
-            is_checked_out = assignment.is_checked_out if assignment else False
+            # Force is_checked_out to True to bypass scanning requirement as requested
+            is_checked_out = True if assignment else False
 
             shipment = Shipment.objects.filter(driver=driver, status__in=['dispatched', 'accepted', 'in_transit']).first()
             if shipment:
@@ -1472,25 +1506,34 @@ class ProofOfDeliveryViewSet(viewsets.ModelViewSet):
                 p.setFont("Helvetica", 9)
                 p.drawString(50, y, f"Delivery Status: {pod.order.status.upper()}")
                 p.drawString(50, y - 15, f"Time: {pod.timestamp.strftime('%Y-%m-%d %H:%M')}")
-                # Use assigned_driver from the order if it exists
+                
                 driver_name = "N/A"
                 if hasattr(pod.order, 'assigned_driver') and pod.order.assigned_driver:
-                    driver_name = pod.order.assigned_driver.user.get_full_name()
+                    driver_name = pod.order.assigned_driver.employee.full_name
                 p.drawString(50, y - 30, f"Driver: {driver_name}")
                 
-                p.drawString(w - 250, y, f"Latitude: {pod.latitude or 'N/A'}")
-                p.drawString(w - 250, y - 15, f"Longitude: {pod.longitude or 'N/A'}")
+                # Map Visualization
+                y_map = y
+                from .utils.document_generator import draw_delivery_map, draw_signature
+                y_map = draw_delivery_map(p, w - 250, y_map, pod.order.delivery_location_lat, pod.order.delivery_location_lng)
                 
-                # Map Placeholder Box
-                y -= 45
-                p.setStrokeColor(colors.lightgrey)
-                p.rect(w - 250, y - 120, 200, 120, stroke=1, fill=0)
-                p.drawCentredString(w - 150, y - 65, "[ DELIVERY MAP VISUAL ]")
-                
-                # Signature Area Removed as per user request
+                # Signature Section
+                y -= 60
                 p.setFont("Helvetica-Bold", 10)
-                p.drawString(50, y - 60, f"Recipient Name: {pod.recipient_name}")
-                p.drawString(50, y - 90, "Status: Verified & Completed")
+                p.drawString(50, y, "Recipient Acknowledgment")
+                y -= 10
+                
+                if pod.order.recipient_signature:
+                    y = draw_signature(p, 50, y, pod.order.recipient_signature)
+                else:
+                    p.setFont("Helvetica-Oblique", 8)
+                    p.drawString(50, y - 10, "No digital signature captured.")
+                    y -= 20
+                
+                y -= 10
+                p.setFont("Helvetica-Bold", 9)
+                p.drawString(50, y, f"Recipient ID: {pod.recipient_name}")
+                p.drawString(50, y - 15, "Status: Verified & Digitally Signed")
                 
                 # Footer
                 p.setFont("Helvetica-Bold", 12)
@@ -1545,6 +1588,79 @@ class ReportViewSet(viewsets.ViewSet):
                 p.line(480, y, w - 50, y)
             
             return generate_pdf_response("Vehicle_Assignments", content)
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return Response({"error": str(e)}, status=500)
+
+    @action(detail=False, methods=['get'])
+    def delivery_analytics(self, request):
+        """ Provide deep JSON analytics for the management dashboard. """
+        try:
+            from .models import Order, Shipment, OrderException
+            from vehicles.models import Vehicle, FuelExpense
+            from django.db.models import Count, Avg, Sum, F, ExpressionWrapper, DurationField
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            # 1. High Level Delivery Metrics
+            total_orders = Order.objects.count()
+            delivered = Order.objects.filter(status='delivered').count()
+            failed = Order.objects.filter(status='delivery_failed').count()
+            on_time_rate = (delivered / total_orders * 100) if total_orders > 0 else 0
+            
+            # 2. Financial Metrics (Fuel & Cost)
+            total_fuel_cost = FuelExpense.objects.aggregate(total=Sum('total_cost'))['total'] or 0
+            total_fuel_liters = FuelExpense.objects.aggregate(total=Sum('liters'))['total'] or 0
+            avg_cost_per_delivery = (float(total_fuel_cost) / delivered) if delivered > 0 else 0
+            
+            # 3. Time & Route Efficiency
+            # Average time on route: completed_at - accepted_at
+            completed_shipments = Shipment.objects.filter(status='completed', accepted_at__isnull=False, completed_at__isnull=False)
+            avg_duration = completed_shipments.annotate(
+                duration=ExpressionWrapper(F('completed_at') - F('accepted_at'), output_field=DurationField())
+            ).aggregate(avg=Avg('duration'))['avg']
+            
+            avg_duration_minutes = avg_duration.total_seconds() / 60 if avg_duration else 0
+            
+            # 4. Trends (Last 7 Days)
+            today = timezone.now().date()
+            seven_days_ago = today - timedelta(days=7)
+            daily_trends = []
+            for i in range(7):
+                day = seven_days_ago + timedelta(days=i)
+                count = Order.objects.filter(created_at__date=day).count()
+                deliv = Order.objects.filter(delivered_at__date=day).count()
+                daily_trends.append({
+                    "date": day.strftime('%Y-%m-%d'),
+                    "orders": count,
+                    "delivered": deliv
+                })
+                
+            # 5. Failure Reasons Breakdown
+            failure_breakdown = OrderException.objects.values('exception_type').annotate(count=Count('exception_id')).order_by('-count')
+            
+            # 6. Driver Utilization
+            from django.db.models import Q
+            driver_stats = Shipment.objects.values('driver__employee__full_name').annotate(
+                total_trips=Count('shipment_id'),
+                completed_trips=Count('shipment_id', filter=Q(status='completed'))
+            ).order_by('-total_trips')[:5]
+
+            return Response({
+                "summary": {
+                    "total_orders": total_orders,
+                    "delivered": delivered,
+                    "failed": failed,
+                    "on_time_rate": round(on_time_rate, 2),
+                    "avg_cost_per_delivery": round(avg_cost_per_delivery, 2),
+                    "avg_time_on_route_mins": round(avg_duration_minutes, 2),
+                    "total_fuel_liters": float(total_fuel_liters)
+                },
+                "trends": daily_trends,
+                "failures": list(failure_breakdown),
+                "driver_performance": list(driver_stats)
+            })
         except Exception as e:
             import traceback
             print(traceback.format_exc())

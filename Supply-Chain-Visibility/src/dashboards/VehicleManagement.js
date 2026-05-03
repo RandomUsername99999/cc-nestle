@@ -1,13 +1,213 @@
-import { useState, useEffect } from "react";
-import api from "../api";
-import { BiPlus, BiPencil, BiTrash, BiTransferAlt, BiSearch, BiCalendar, BiPackage, BiBadgeCheck, BiInfoCircle, BiDownload, BiQrScan } from "react-icons/bi";
-import { GiTruck, GiWeight, GiResize } from "react-icons/gi";
-import toast from 'react-hot-toast';
-import ConfirmationModal from '../UIComponents/ConfirmationModal';
-import VehicleAssignments from './VehicleAssignments';
-import { QRCodeSVG } from 'qrcode.react';
+function VehicleDetailPopup({ vehicle, onClose, onRefresh }) {
+    const [activeSubTab, setActiveSubTab] = useState('INFO'); // INFO, MAINTENANCE, FUEL
+    
+    return (
+        <div className="fixed inset-0 bg-[#3E2723]/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+            <div className="bg-white p-8 rounded-[40px] shadow-2xl w-full max-w-4xl border border-coffee-100 flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-start mb-8">
+                    <div className="flex items-center gap-6">
+                        <div className="w-16 h-16 rounded-2xl bg-coffee-50 border border-coffee-100 flex items-center justify-center text-coffee-700 text-3xl">
+                            <GiTruck />
+                        </div>
+                        <div>
+                            <h2 className="text-3xl font-black text-coffee-900 tracking-tight">{vehicle.plate_number}</h2>
+                            <p className="text-sm font-bold text-coffee-400 uppercase tracking-widest">{vehicle.manufacturer} {vehicle.make_model} • {vehicle.year}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-coffee-50 rounded-full transition-colors text-coffee-400">✕</button>
+                </div>
 
-function QRCodePopup({ vehicle, onClose }) {
+                <div className="flex gap-2 mb-8 bg-coffee-50/50 p-1.5 rounded-2xl w-max">
+                    {['INFO', 'MAINTENANCE', 'FUEL'].map(tab => (
+                        <button 
+                            key={tab}
+                            onClick={() => setActiveSubTab(tab)}
+                            className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeSubTab === tab ? 'bg-white text-coffee-700 shadow-sm shadow-coffee-100' : 'text-coffee-400'}`}
+                        >
+                            {tab}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                    {activeSubTab === 'INFO' && <VehicleInfoTab vehicle={vehicle} />}
+                    {activeSubTab === 'MAINTENANCE' && <VehicleMaintenanceTab vehicle={vehicle} onRefresh={onRefresh} />}
+                    {activeSubTab === 'FUEL' && <VehicleFuelTab vehicle={vehicle} onRefresh={onRefresh} />}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function VehicleInfoTab({ vehicle }) {
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
+            <div className="space-y-6">
+                <DetailItem label="Asset Type" value={vehicle.vehicle_type} icon={<GiTruck />} />
+                <DetailItem label="Purchase Date" value={vehicle.purchase_date || 'N/A'} icon={<BiCalendar />} />
+                <DetailItem label="Current Mileage" value={`${vehicle.current_mileage || 0} KM`} icon={<Activity />} />
+                <DetailItem label="Fuel Consumption" value={`${vehicle.fuel_consumption_rate || 0} L/100km`} icon={<Fuel />} />
+            </div>
+            <div className="space-y-6">
+                <DetailItem label="Capacity" value={`${vehicle.capacity} KG / ${vehicle.volume} m³`} icon={<GiWeight />} />
+                <DetailItem label="Next Service" value={vehicle.next_service_date || 'Scheduled by distance'} icon={<BiCalendar />} />
+                <DetailItem label="Service Threshold" value={`${vehicle.next_service_mileage || 'N/A'} KM`} icon={<Activity />} />
+                <DetailItem label="Refrigeration" value={vehicle.is_refrigerated ? 'Equipped (Cold Chain)' : 'Standard'} icon={<span>❄️</span>} />
+            </div>
+        </div>
+    );
+}
+
+function VehicleMaintenanceTab({ vehicle, onRefresh }) {
+    const [showAdd, setShowAdd] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [form, setForm] = useState({ service_type: 'engine_oil', date: new Date().toISOString().split('T')[0], mileage_at_service: vehicle.current_mileage, cost: '', next_service_due_mileage: '' });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await api.post(`vehicles/${vehicle.id}/log_maintenance/`, form);
+            toast.success("Maintenance log synchronized");
+            setShowAdd(false);
+            onRefresh();
+        } catch (e) { toast.error("Submission failed"); }
+        setLoading(false);
+    };
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+            <div className="flex justify-between items-center">
+                <h3 className="text-sm font-black text-coffee-900 uppercase tracking-widest">Service History</h3>
+                <button onClick={() => setShowAdd(!showAdd)} className="text-[10px] font-black text-blue-600 uppercase tracking-widest">+ Record Service</button>
+            </div>
+
+            {showAdd && (
+                <form onSubmit={handleSubmit} className="bg-coffee-50/50 p-6 rounded-[24px] border border-coffee-100 grid grid-cols-2 gap-4 animate-fade-in-up">
+                    <div className="col-span-2">
+                        <label className="text-[10px] font-black text-coffee-400 uppercase tracking-widest">Service Type</label>
+                        <select value={form.service_type} onChange={e => setForm({...form, service_type: e.target.value})} className="w-full bg-white border border-coffee-100 rounded-xl px-4 py-2.5 text-sm font-bold text-coffee-700 mt-1">
+                            <option value="engine_oil">Engine Oil Change</option>
+                            <option value="tire_rotation">Tire Rotation</option>
+                            <option value="brake_service">Brake Service</option>
+                            <option value="transmission">Transmission Flush</option>
+                            <option value="general_check">General Inspection</option>
+                            <option value="repair">Mechanical Repair</option>
+                        </select>
+                    </div>
+                    <VehicleInputField label="Date" type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required />
+                    <VehicleInputField label="Mileage at Service" type="number" value={form.mileage_at_service} onChange={e => setForm({...form, mileage_at_service: e.target.value})} required />
+                    <VehicleInputField label="Total Cost" type="number" value={form.cost} onChange={e => setForm({...form, cost: e.target.value})} required />
+                    <VehicleInputField label="Next Due (KM)" type="number" value={form.next_service_due_mileage} onChange={e => setForm({...form, next_service_due_mileage: e.target.value})} />
+                    <div className="col-span-2 flex justify-end gap-2 pt-2">
+                         <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 text-xs font-bold text-coffee-400">Cancel</button>
+                         <button type="submit" disabled={loading} className="bg-coffee-700 text-white px-6 py-2 rounded-xl text-xs font-black shadow-lg shadow-coffee-100">{loading ? '...' : 'Save Log'}</button>
+                    </div>
+                </form>
+            )}
+
+            <div className="space-y-3">
+                {vehicle.maintenance_logs?.map((log, i) => (
+                    <div key={i} className="bg-white border border-coffee-100 p-5 rounded-[24px] flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                                <Activity size={18} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-black text-coffee-950 uppercase tracking-tight">{log.service_type.replace(/_/g, ' ')}</p>
+                                <p className="text-[10px] font-bold text-coffee-400">{log.date} • {log.mileage_at_service} KM</p>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-sm font-black text-coffee-900">${log.cost}</p>
+                            <p className="text-[9px] font-bold text-emerald-500 uppercase">Verified</p>
+                        </div>
+                    </div>
+                ))}
+                {(!vehicle.maintenance_logs || vehicle.maintenance_logs.length === 0) && <p className="text-center py-10 text-xs font-bold text-coffee-300 italic">No maintenance history available for this unit.</p>}
+            </div>
+        </div>
+    );
+}
+
+function VehicleFuelTab({ vehicle, onRefresh }) {
+    const [showAdd, setShowAdd] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], liters: '', cost_per_liter: '', total_cost: '', mileage_at_refill: vehicle.current_mileage, location: '' });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await api.post(`vehicles/${vehicle.id}/log_fuel/`, form);
+            toast.success("Fuel expense synchronized");
+            setShowAdd(false);
+            onRefresh();
+        } catch (e) { toast.error("Submission failed"); }
+        setLoading(false);
+    };
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+            <div className="flex justify-between items-center">
+                <h3 className="text-sm font-black text-coffee-900 uppercase tracking-widest">Fuel Consumption Logs</h3>
+                <button onClick={() => setShowAdd(!showAdd)} className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">+ Record Refill</button>
+            </div>
+
+            {showAdd && (
+                <form onSubmit={handleSubmit} className="bg-coffee-50/50 p-6 rounded-[24px] border border-coffee-100 grid grid-cols-2 gap-4 animate-fade-in-up">
+                    <VehicleInputField label="Refill Date" type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required />
+                    <VehicleInputField label="Liters" type="number" step="0.01" value={form.liters} onChange={e => setForm({...form, liters: e.target.value})} required />
+                    <VehicleInputField label="Price / Liter" type="number" step="0.001" value={form.cost_per_liter} onChange={e => setForm({...form, cost_per_liter: e.target.value})} required />
+                    <VehicleInputField label="Total Amount" type="number" step="0.01" value={form.total_cost} onChange={e => setForm({...form, total_cost: e.target.value})} required />
+                    <VehicleInputField label="Current Mileage" type="number" value={form.mileage_at_refill} onChange={e => setForm({...form, mileage_at_refill: e.target.value})} required />
+                    <VehicleInputField label="Filling Station" value={form.location} onChange={e => setForm({...form, location: e.target.value})} />
+                    <div className="col-span-2 flex justify-end gap-2 pt-2">
+                         <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 text-xs font-bold text-coffee-400">Cancel</button>
+                         <button type="submit" disabled={loading} className="bg-emerald-600 text-white px-6 py-2 rounded-xl text-xs font-black shadow-lg shadow-emerald-100">{loading ? '...' : 'Save Expense'}</button>
+                    </div>
+                </form>
+            )}
+
+            <div className="space-y-3">
+                {vehicle.fuel_expenses?.map((log, i) => (
+                    <div key={i} className="bg-white border border-coffee-100 p-5 rounded-[24px] flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                <Fuel size={18} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-black text-coffee-950 uppercase tracking-tight">{log.liters} Liters Refill</p>
+                                <p className="text-[10px] font-bold text-coffee-400">{log.date} • {log.location || 'Unknown Station'}</p>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-sm font-black text-coffee-900">${log.total_cost}</p>
+                            <p className="text-[9px] font-bold text-slate-400">{log.mileage_at_refill} KM</p>
+                        </div>
+                    </div>
+                ))}
+                {(!vehicle.fuel_expenses || vehicle.fuel_expenses.length === 0) && <p className="text-center py-10 text-xs font-bold text-coffee-300 italic">No fuel consumption logs recorded.</p>}
+            </div>
+        </div>
+    );
+}
+
+function DetailItem({ label, value, icon }) {
+    return (
+        <div className="flex items-center gap-4 p-4 bg-coffee-50/20 rounded-2xl border border-coffee-100/50">
+            <div className="w-10 h-10 rounded-xl bg-white border border-coffee-100 flex items-center justify-center text-coffee-400 shadow-sm">
+                {icon}
+            </div>
+            <div>
+                <p className="text-[10px] font-black text-coffee-400 uppercase tracking-widest">{label}</p>
+                <p className="text-sm font-black text-coffee-900">{value}</p>
+            </div>
+        </div>
+    );
+}
+
+export default function VehicleManagement() {
     const handlePrint = () => {
         const svg = document.getElementById('qr-svg-container').innerHTML;
         const printWindow = window.open('', '', 'width=600,height=600');
@@ -265,6 +465,7 @@ export default function VehicleManagement() {
     const [activeAction, setActiveAction] = useState(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedVehicle, setSelectedVehicle] = useState(null);
+    const [selectedDetailVehicle, setSelectedDetailVehicle] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [activeTab, setActiveTab] = useState('FLEET');
 
@@ -434,6 +635,13 @@ export default function VehicleManagement() {
                                                 <BiPencil className="text-xl" />
                                             </button>
                                             <button 
+                                                onClick={() => { setSelectedDetailVehicle(v); }}
+                                                className="w-12 h-12 flex items-center justify-center rounded-[18px] border border-coffee-100 text-coffee-400 hover:text-blue-600 hover:bg-blue-50 hover:border-blue-100 transition-all shadow-sm"
+                                                title="Detailed Fleet Metrics & History"
+                                            >
+                                                <BiInfoCircle className="text-xl" />
+                                            </button>
+                                            <button 
                                                 onClick={() => {
                                                     if ((v.current_load_weight || 0) > 0) {
                                                         toast.error("Cannot decommission: Vehicle is assigned to an active shipment.");
@@ -466,6 +674,12 @@ export default function VehicleManagement() {
             {activeAction === 'ADD' && <AddVehiclePopup onSuccess={() => { setActiveAction(null); fetchVehicles(); toast.success("Asset Provisioned"); }} onClose={() => setActiveAction(null)} />}
             {activeAction === 'EDIT' && selectedVehicle && <EditVehiclePopup vehicle={selectedVehicle} onSuccess={() => { setActiveAction(null); setSelectedVehicle(null); fetchVehicles(); toast.success("Asset Synchronized"); }} onClose={() => { setActiveAction(null); setSelectedVehicle(null); }} />}
             {activeAction === 'QR' && selectedVehicle && <QRCodePopup vehicle={selectedVehicle} onClose={() => { setActiveAction(null); setSelectedVehicle(null); }} />}
+            {selectedDetailVehicle && <VehicleDetailPopup vehicle={selectedDetailVehicle} onClose={() => setSelectedDetailVehicle(null)} onRefresh={async () => { 
+                const res = await api.get('vehicles/');
+                setVehicles(res.data);
+                const updated = res.data.find(v => v.id === selectedDetailVehicle.id);
+                if (updated) setSelectedDetailVehicle(updated);
+            }} />}
             
             <ConfirmationModal 
                 isOpen={!!deleteTarget}

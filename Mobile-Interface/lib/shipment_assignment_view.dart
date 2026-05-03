@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:signature/signature.dart';
 import 'qr_scanner_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -213,7 +214,7 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
     }
   }
 
-  Future<void> _completeDelivery(String orderId, String qrCode) async {
+  Future<void> _completeDelivery(String orderId, String qrCode, {String? signature}) async {
     if (_data == null) return;
     final id = _data!['shipment_id'];
     Position pos = await Geolocator.getCurrentPosition();
@@ -228,7 +229,8 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
           "qr_token": qrCode,
           "lat": pos.latitude,
           "lng": pos.longitude,
-          "user_id": widget.userId
+          "user_id": widget.userId,
+          if (signature != null) "signature": signature
         }),
       );
       if (resp.statusCode == 200) {
@@ -247,6 +249,82 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+  
+  void _showSignatureCapture(String orderId, String qrCode) {
+    final signatureController = SignatureController(
+      penStrokeWidth: 3,
+      penColor: const Color(0xFF3E2723),
+      exportBackgroundColor: Colors.white,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
+        ),
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.between,
+              children: [
+                const Text("Recipient Signature", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text("Please have the recipient sign below to confirm delivery.", style: TextStyle(fontSize: 12, color: Color(0xFFBCAAA4))),
+            const SizedBox(height: 32),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFEFEBE9), width: 2),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Signature(
+                    controller: signatureController,
+                    backgroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(child: _buildSecondaryButton(
+                  label: "CLEAR", 
+                  icon: Icons.refresh_rounded, 
+                  onPressed: () => signatureController.clear()
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: _buildActionBtn(
+                  label: "CONFIRM DELIVERY", 
+                  color: const Color(0xFF3E2723), 
+                  onPressed: () async {
+                    if (signatureController.isEmpty) {
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Signature is required to complete delivery.")));
+                       return;
+                    }
+                    final signatureBytes = await signatureController.toPngBytes();
+                    final base64Signature = base64Encode(signatureBytes!);
+                    Navigator.pop(context);
+                    await _completeDelivery(orderId, qrCode, signature: base64Signature);
+                  }
+                )),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showError(String msg) {
@@ -388,10 +466,12 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
             label: "SCAN PICKUP QR",
             icon: Icons.qr_code_scanner_rounded,
             onPressed: () {
-              final messenger = ScaffoldMessenger.of(context);
+              bool hasScanned = false;
               Navigator.push(context, MaterialPageRoute(builder: (scanCtx) => QRScannerView(
                 title: "Scan Pickup",
                 onScan: (code) async {
+                  if (hasScanned) return;
+                  hasScanned = true;
                   Navigator.pop(scanCtx);
                   await _confirmPickup(code);
                 },
@@ -406,11 +486,13 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
   // --- STAGE 3: TRANSIT / DELIVERY FLOW ---
   Widget _buildTransitStage() {
     final allStops = _data!['stops'] as List;
+    debugPrint("REBUILDING TRANSIT STAGE. TOTAL STOPS: ${allStops.length}");
     final pendingStops = allStops.where((s) {
       final status = (s['status'] ?? '').toString().toLowerCase();
       debugPrint("STOP ID ${s['order_id']} STATUS: $status");
       return status != 'delivered' && status != 'delivery_failed';
     }).toList();
+    debugPrint("PENDING STOPS FILTERED: ${pendingStops.length}");
     
     return Column(
       children: [
@@ -490,12 +572,14 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
                         label: "DELIVER",
                         color: const Color(0xFF3E2723),
                         onPressed: () {
-                          final messenger = ScaffoldMessenger.of(context);
+                          bool hasScanned = false;
                           Navigator.push(context, MaterialPageRoute(builder: (scanCtx) => QRScannerView(
                             title: "Deliver Stop",
                             onScan: (code) async {
+                              if (hasScanned) return;
+                              hasScanned = true;
                               Navigator.pop(scanCtx);
-                              await _completeDelivery(stop['order_id'], code);
+                              _showSignatureCapture(stop['order_id'], code);
                             },
                           )));
                         },

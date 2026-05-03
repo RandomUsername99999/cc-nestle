@@ -617,7 +617,7 @@ export default function DispatchPlanning() {
         {/* RIGHT COLUMN: Manifest Summary - Matches Mockup Style */}
         <section className="sticky top-12 space-y-10">
           <div className="bg-white rounded-[48px] shadow-2xl shadow-coffee-200/10 border border-coffee-100/30 p-10 flex flex-col gap-10">
-            <h2 className="text-[10px] font-black text-coffee-950 uppercase tracking-[0.2em] px-1">Manifest Summary</h2>
+            <h2 className="text-[10px] font-black text-coffee-950 uppercase tracking-[0.2em] px-1">Outbound Summary</h2>
 
             <div className="bg-[#FAF9F6] p-10 rounded-[40px] flex items-center justify-between border border-coffee-50 group hover:shadow-lg transition-all cursor-pointer">
               <div>
@@ -689,7 +689,7 @@ export default function DispatchPlanning() {
                 disabled={!selectedVehicle || !selectedVehicleData?.assignedDriver || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100}
                 className={`w-full py-6 rounded-[32px] font-black uppercase tracking-widest text-[11px] transition-all shadow-xl active:scale-95 ${!selectedVehicle || !selectedVehicleData?.assignedDriver || selectedOrders.length === 0 || weightPercent > 100 || volumePercent > 100 ? 'bg-coffee-50 text-coffee-200 cursor-not-allowed shadow-none' : 'bg-[#D6D3D1] text-coffee-900 hover:bg-coffee-950 hover:text-white'}`}
               >
-                {selectedVehicle && !selectedVehicleData?.assignedDriver ? "Binding Required" : "Deploy Manifest"}
+                {selectedVehicle && !selectedVehicleData?.assignedDriver ? "Binding Required" : "Deploy Outbound"}
               </button>
             </div>
           </div>

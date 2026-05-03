@@ -391,41 +391,15 @@ class _HomePageState extends State<HomePage> {
 
                     if (_isLoadingTask)
                       const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: Color(0xFF3E2723))))
-                    else if (_activeTask != null && _activeTask!['is_checked_out'] == true)
+                    else if (_activeTask != null)
                       _buildMissionCard()
-                    else if (_activeTask != null && _activeTask!['is_checked_out'] == false)
-                      Container(
-                        padding: const EdgeInsets.all(32),
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(32),
-                          border: Border.all(color: const Color(0xFFEFEBE9)),
-                        ),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.lock_outline, size: 48, color: Color(0xFFBCAAA4)),
-                            const SizedBox(height: 16),
-                            const Text(
-                              "MISSION BLOCKED",
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 1),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              "Please checkout your assigned asset to unlock dispatch instructions.",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4), height: 1.5),
-                            ),
-                          ],
-                        ),
-                      )
                     else
                       _buildIdleState(),
 
                     const SizedBox(height: 32),
                     // Fleet Action Panel - DYNAMIC BUTTONS
                     const SizedBox(height: 16),
-                    if (_activeTask?['is_checked_out'] == true)
+                    if (_activeTask != null)
                       GestureDetector(
                         onTap: () => _handleVehicleAction(true),
                         child: Container(
@@ -443,26 +417,6 @@ class _HomePageState extends State<HomePage> {
                               Icon(Icons.logout_rounded, color: Colors.white),
                               SizedBox(height: 8),
                               Text("RETURN ASSET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5)),
-                            ],
-                          ),
-                        ),
-                      )
-                    else
-                      GestureDetector(
-                        onTap: () => _handleVehicleAction(false),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 20),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFEFEBE9), width: 2),
-                          ),
-                          child: const Column(
-                            children: [
-                              Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF3E2723)),
-                              SizedBox(height: 8),
-                              Text("CHECKOUT ASSIGNED ASSET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), letterSpacing: 1.5)),
                             ],
                           ),
                         ),

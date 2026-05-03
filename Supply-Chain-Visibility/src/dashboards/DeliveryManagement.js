@@ -225,7 +225,7 @@ const DeliveryManagement = () => {
                     >
                         <option value="all">All Types</option>
                         <option value="order">Orders</option>
-                        <option value="shipment">Manifests</option>
+                        <option value="shipment">Outbound</option>
                     </select>
                 </div>
             </div>
@@ -290,7 +290,7 @@ const DeliveryManagement = () => {
                                                 ? 'bg-coffee-50 text-coffee-600 border-coffee-100'
                                                 : 'bg-indigo-50 text-indigo-600 border-indigo-100'
                                         }`}>
-                                            {activity.type === 'order' ? 'Order' : 'Manifest'}
+                                            {activity.type === 'order' ? 'Order' : 'Outbound'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-5 max-w-[200px]">

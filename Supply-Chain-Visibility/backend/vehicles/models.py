@@ -14,6 +14,13 @@ class Vehicle(models.Model):
     status = models.CharField(max_length=14, blank=True, null=True)
     insurance_expiry = models.DateField(blank=True, null=True)
     registration_expiry = models.DateField(blank=True, null=True)
+    
+    # New Fleet Mgmt Fields
+    purchase_date = models.DateField(null=True, blank=True)
+    current_mileage = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    next_service_mileage = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    next_service_date = models.DateField(null=True, blank=True)
+    fuel_consumption_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0) # L/100km
 
     @property
     def licensePlate(self):
@@ -58,3 +65,37 @@ class Vehicle(models.Model):
     class Meta:
         managed = True
         db_table = 'vehicles'
+
+class MaintenanceLog(models.Model):
+    SERVICE_TYPES = [
+        ('engine_oil', 'Engine Oil Change'),
+        ('tire_rotation', 'Tire Rotation'),
+        ('brake_service', 'Brake Service'),
+        ('transmission', 'Transmission Flush'),
+        ('general_check', 'General Inspection'),
+        ('repair', 'Repair/Mechanical')
+    ]
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name='maintenance_logs')
+    service_type = models.CharField(max_length=50, choices=SERVICE_TYPES)
+    date = models.DateField()
+    mileage_at_service = models.DecimalField(max_digits=12, decimal_places=2)
+    cost = models.DecimalField(max_digits=10, decimal_places=2)
+    technician_notes = models.TextField(blank=True, null=True)
+    next_service_due_mileage = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = 'vehicle_maintenance_logs'
+
+class FuelExpense(models.Model):
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name='fuel_expenses')
+    date = models.DateField()
+    liters = models.DecimalField(max_digits=10, decimal_places=2)
+    cost_per_liter = models.DecimalField(max_digits=10, decimal_places=2)
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    mileage_at_refill = models.DecimalField(max_digits=12, decimal_places=2)
+    location = models.CharField(max_length=200, blank=True, null=True)
+
+    class Meta:
+        managed = True
+        db_table = 'vehicle_fuel_expenses'

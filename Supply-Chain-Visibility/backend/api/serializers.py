@@ -157,6 +157,22 @@ class UserSerializer(serializers.ModelSerializer):
                     )
             
         return instance
+        return instance
+
+class MaintenanceLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vehicle.maintenance_logs.rel.model if hasattr(Vehicle, 'maintenance_logs') else None # Late bind helper
+        # Actually I just added them to vehicles.models so I should import them
+        from vehicles.models import MaintenanceLog, FuelExpense
+        model = MaintenanceLog
+        fields = '__all__'
+
+class FuelExpenseSerializer(serializers.ModelSerializer):
+    class Meta:
+        from vehicles.models import FuelExpense
+        model = FuelExpense
+        fields = '__all__'
+
 class VehicleSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source='vehicle_id', read_only=True)
     plate_number = serializers.CharField()
@@ -174,9 +190,19 @@ class VehicleSerializer(serializers.ModelSerializer):
     current_load_weight = serializers.FloatField(read_only=True)
     current_load_volume = serializers.FloatField(read_only=True)
 
+    # Fleet Mgmt Fields
+    purchase_date = serializers.DateField(required=False, allow_null=True)
+    current_mileage = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    next_service_mileage = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    next_service_date = serializers.DateField(required=False, allow_null=True)
+    fuel_consumption_rate = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    
+    maintenance_logs = MaintenanceLogSerializer(many=True, read_only=True)
+    fuel_expenses = FuelExpenseSerializer(many=True, read_only=True)
+
     class Meta:
         model = Vehicle
-        fields = ('id', 'plate_number', 'vehicle_type', 'make_model', 'manufacturer', 'year', 'capacity', 'volume', 'assignedDriver', 'driver_name', 'status', 'insurance_expiry', 'registration_expiry', 'is_refrigerated', 'current_load_weight', 'current_load_volume')
+        fields = ('id', 'plate_number', 'vehicle_type', 'make_model', 'manufacturer', 'year', 'capacity', 'volume', 'assignedDriver', 'driver_name', 'status', 'insurance_expiry', 'registration_expiry', 'is_refrigerated', 'current_load_weight', 'current_load_volume', 'purchase_date', 'current_mileage', 'next_service_mileage', 'next_service_date', 'fuel_consumption_rate', 'maintenance_logs', 'fuel_expenses')
 
     def get_assignedDriver(self, obj):
         active_assignment = obj.assignments.filter(status='active').first()

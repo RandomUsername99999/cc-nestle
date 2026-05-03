@@ -4,7 +4,7 @@ const TRANSLATIONS = {
     en: {
         dashboard: "Dashboard",
         orders: "Order Management",
-        shipments: "Shipment Manifests",
+        shipments: "Shipment Outbound",
         management: "Delivery Mgmt",
         tracker: "Live Tracker",
         dispatch: "Dispatch Planning",
@@ -27,7 +27,7 @@ const TRANSLATIONS = {
     fr: {
         dashboard: "Tableau de bord",
         orders: "Gestion des commandes",
-        shipments: "Manifestes d'expédition",
+        shipments: "Expéditions Sortantes",
         management: "Gestion des livraisons",
         tracker: "Suivi en direct",
         dispatch: "Planification des expéditions",
@@ -50,7 +50,7 @@ const TRANSLATIONS = {
     de: {
         dashboard: "Armaturenbrett",
         orders: "Auftragsverwaltung",
-        shipments: "Versandmanifeste",
+        shipments: "Ausgehender Versand",
         management: "Liefermanagement",
         tracker: "Live-Tracker",
         dispatch: "Versandplanung",
@@ -73,7 +73,7 @@ const TRANSLATIONS = {
     si: {
         dashboard: "උපකරණ පුවරුව",
         orders: "ඇණවුම් කළමනාකරණය",
-        shipments: "නැව්ගත කිරීම්",
+        shipments: "පිටතට යන නැව්ගත කිරීම්",
         management: "බෙදාහැරීමේ කළමනාකරණය",
         tracker: "සජීවී ට්රැකර්",
         dispatch: "පිටත් කිරීම සැලසුම් කිරීම",
@@ -96,7 +96,7 @@ const TRANSLATIONS = {
     ar: {
         dashboard: "لوحة القيادة",
         orders: "إدارة الطلبات",
-        shipments: "بيانات الشحن",
+        shipments: "الشحنات الصادرة",
         management: "إدارة التوصيل",
         tracker: "متتبع مباشر",
         dispatch: "تخطيط الإرسال",

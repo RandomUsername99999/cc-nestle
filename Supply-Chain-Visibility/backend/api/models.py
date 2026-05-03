@@ -164,6 +164,7 @@ class Order(models.Model):
     delivered_by_driver_id = models.IntegerField(null=True, blank=True)
     delivery_location_lat = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
     delivery_location_lng = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+    recipient_signature = models.TextField(null=True, blank=True) # Base64 signature
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

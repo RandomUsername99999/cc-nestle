@@ -99,7 +99,7 @@ const ShipmentManifest = () => {
                         <div className="bg-white p-6 rounded-3xl border-4 border-coffee-900 shadow-inner mb-6">
                             <QRCodeSVG value={zoomedQR.value} size={250} fgColor="#3E2723" />
                         </div>
-                        <h3 className="text-xl font-black text-coffee-950 mb-1">Manifest QR Code</h3>
+                        <h3 className="text-xl font-black text-coffee-950 mb-1">Outbound QR Code</h3>
                         <p className="text-sm text-coffee-400 font-bold uppercase tracking-widest">#{zoomedQR.id}</p>
                     </div>
                 </div>
@@ -108,13 +108,13 @@ const ShipmentManifest = () => {
             {/* Header Section */}
             <div className="bg-white p-6 rounded-[24px] shadow-sm border border-coffee-100 flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-black text-coffee-950 tracking-tight">Logistics Manifests</h1>
+                    <h1 className="text-2xl font-black text-coffee-950 tracking-tight">Logistics Outbound</h1>
                     <p className="text-coffee-500 font-medium text-sm mt-1">Full audit trail and tracking for deployed shipments.</p>
                 </div>
                 <div className="flex items-center space-x-4">
                     <div className="text-right">
                         <p className="text-[10px] font-black text-coffee-400 uppercase tracking-widest">Active Assets</p>
-                        <p className="text-sm font-black text-coffee-950">{shipments.length} Active Manifests</p>
+                        <p className="text-sm font-black text-coffee-950">{shipments.length} Active Outbound</p>
                     </div>
                     <div className="w-12 h-12 bg-coffee-50 rounded-2xl flex items-center justify-center text-coffee-700 border border-coffee-100">
                         <BiSelection className="text-2xl" />
@@ -137,7 +137,7 @@ const ShipmentManifest = () => {
                         <BiSearch className="text-coffee-300 text-xl" />
                         <input 
                             type="text" 
-                            placeholder="Search by Manifest ID, Vehicle or Driver..." 
+                            placeholder="Search by Outbound ID, Vehicle or Driver..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="flex-1 bg-transparent border-none text-sm font-medium focus:outline-none placeholder-coffee-200"
