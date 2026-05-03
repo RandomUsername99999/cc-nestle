@@ -65,5 +65,9 @@ node_modules/
 # dotenv environment variables file
 .env
 
+# Firebase service account private key - NEVER commit this
+serviceAccount.json
+**/serviceAccount.json
+
 # dataconnect generated files
 .dataconnect

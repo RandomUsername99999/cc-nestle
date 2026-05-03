@@ -209,7 +209,7 @@ def initialize_firebase():
         try:
             cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred, {
-                'databaseURL': os.getenv('FIREBASE_DATABASE_URL', 'https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com')
+                'databaseURL': os.getenv('FIREBASE_DATABASE_URL', 'https://ccgroup-99075-default-rtdb.asia-southeast1.firebasedatabase.app')
             })
             print("Firebase initialized using serviceAccount.json.")
         except Exception as e:
