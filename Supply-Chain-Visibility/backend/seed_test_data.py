@@ -259,16 +259,30 @@ def seed_data(orders_count_target, vehicles_count_target, drivers_count_target, 
         )
     
     all_suppliers = list(Supplier.objects.all())
+    from inbound.models import ManifestLineItem
     for i in range(12):
-        SupplierDeliveryManifest.objects.create(
+        manifest = SupplierDeliveryManifest.objects.create(
             manifest_reference=f"MNF-{random.randint(10000, 99999)}",
             supplier=random.choice(all_suppliers),
             status=random.choice(['received', 'planned', 'assigned', 'in_transit', 'delivered']),
             expected_collection=timezone.now() + timedelta(days=random.randint(1, 10)),
-            total_weight_kg=Decimal(random.uniform(100, 5000)),
-            total_volume_m3=Decimal(random.uniform(1, 20))
+            # Totals will be set by line items
         )
-    print("Created 12 Inbound Supplier Manifests")
+        # Create items
+        for _ in range(random.randint(2, 6)):
+            item_names = ['Nestle Milo', 'Maggi Noodles', 'Nescafe', 'KitKat', 'Nido']
+            qty = random.randint(10, 200)
+            u_weight = random.uniform(0.2, 5.0)
+            ManifestLineItem.objects.create(
+                manifest=manifest,
+                item_code=f"SKU-{random.randint(1000, 9999)}",
+                description=random.choice(item_names),
+                unit='cases',
+                expected_qty=qty,
+                unit_weight_kg=Decimal(f"{u_weight:.2f}"),
+                unit_volume_m3=Decimal(f"{u_weight/500:.4f}")
+            )
+    print("Created 12 Inbound Supplier Manifests with items")
 
     print("Data Seeding Completed Successfully!")
 

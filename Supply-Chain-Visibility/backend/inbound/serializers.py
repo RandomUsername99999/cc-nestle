@@ -17,11 +17,22 @@ class ManifestLineItemSerializer(serializers.ModelSerializer):
 
 class ManifestSerializer(serializers.ModelSerializer):
     supplier = SupplierSerializer(read_only=True)
-    line_items = ManifestLineItemSerializer(many=True, read_only=True)
+    supplier_id = serializers.PrimaryKeyRelatedField(
+        queryset=Supplier.objects.all(), source='supplier', write_only=True
+    )
+    line_items = ManifestLineItemSerializer(many=True)
 
     class Meta:
         model = SupplierDeliveryManifest
         fields = '__all__'
+
+    def create(self, validated_data):
+        line_items_data = validated_data.pop('line_items', [])
+        manifest = SupplierDeliveryManifest.objects.create(**validated_data)
+        for item_data in line_items_data:
+            ManifestLineItem.objects.create(manifest=manifest, **item_data)
+        # Totals are updated via the ManifestLineItem.save() call
+        return manifest
 
 class AssignmentDetailSerializer(serializers.ModelSerializer):
     manifest = ManifestSerializer(read_only=True)

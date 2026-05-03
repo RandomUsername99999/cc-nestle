@@ -65,15 +65,18 @@ class SupplierDeliveryManifest(models.Model):
     created_at          = models.DateTimeField(auto_now_add=True)
     updated_at          = models.DateTimeField(auto_now=True)
 
+    def update_totals(self):
+        """Re-calculate totals from line items and save."""
+        agg = self.line_items.aggregate(
+            tw=models.Sum('total_weight_kg'),
+            tv=models.Sum('total_volume_m3'),
+        )
+        self.total_weight_kg = agg['tw'] or 0
+        self.total_volume_m3 = agg['tv'] or 0
+        self.save(update_fields=['total_weight_kg', 'total_volume_m3'])
+
     def save(self, *args, **kwargs):
-        # Recalculate totals from line items before saving
-        if self.pk:
-            agg = self.line_items.aggregate(
-                tw=models.Sum('total_weight_kg'),
-                tv=models.Sum('total_volume_m3'),
-            )
-            self.total_weight_kg = agg['tw'] or 0
-            self.total_volume_m3 = agg['tv'] or 0
+        # We no longer auto-calculate here to avoid recursion during update_totals
         super().save(*args, **kwargs)
 
 class ManifestLineItem(models.Model):
@@ -100,6 +103,12 @@ class ManifestLineItem(models.Model):
         self.total_weight_kg = float(self.expected_qty) * float(self.unit_weight_kg)
         self.total_volume_m3 = float(self.expected_qty) * float(self.unit_volume_m3)
         super().save(*args, **kwargs)
+        self.manifest.update_totals()
+
+    def delete(self, *args, **kwargs):
+        manifest = self.manifest
+        super().delete(*args, **kwargs)
+        manifest.update_totals()
 
 class InboundCollectionAssignment(models.Model):
     """
