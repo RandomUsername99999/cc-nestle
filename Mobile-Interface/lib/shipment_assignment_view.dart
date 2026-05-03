@@ -89,6 +89,15 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         debugPrint("FETCHED ASSIGNMENT DATA: ${response.body}");
+        
+        if (data.containsKey('error')) {
+          setState(() {
+            _data = null;
+            _error = data['error'];
+          });
+          return;
+        }
+
         setState(() {
           _data = data;
           _error = null;
@@ -96,7 +105,7 @@ class _ShipmentAssignmentViewState extends State<ShipmentAssignmentView> {
         if (data['status'] == 'dispatched') {
           _startAcceptanceTimer();
         } else if (data['status'] == 'in_transit') {
-          _startLocationTracking(data['shipment_id']);
+          _startLocationTracking(data['shipment_id'].toString());
         }
       } else if (response.statusCode == 404) {
         setState(() {
