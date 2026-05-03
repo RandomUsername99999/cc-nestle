@@ -56,12 +56,14 @@ class AssignmentCreateView(APIView):
 
         try:
             vehicle = Vehicle.objects.get(pk=vehicle_id)
-            # Try looking up by Driver PK first, then fall back to User ID mapping
+            # Standardization: Frontend passes User ID (from CustomUser) as driver_id.
+            # We must map this to the Driver profile record correctly.
             try:
-                driver = Driver.objects.get(pk=driver_id)
-            except (Driver.DoesNotExist, ValueError):
                 driver = Driver.objects.get(employee__user__user_id=driver_id)
-        except (Vehicle.DoesNotExist, Driver.DoesNotExist):
+            except Driver.DoesNotExist:
+                # Fallback only if direct PK match is absolutely required (rare)
+                driver = Driver.objects.get(pk=driver_id)
+        except (Vehicle.DoesNotExist, Driver.DoesNotExist, ValueError):
             return Response({'error': 'invalid_vehicle_or_driver'}, status=400)
 
         # Validate capability
@@ -118,15 +120,16 @@ class DockAvailabilityView(APIView):
 
 class AssignmentAcceptView(APIView):
     def post(self, request, pk):
-        # Depending on how authentication is bound
         try:
-            driver_profile = request.user.driver_profile
-        except AttributeError:
-            driver_profile = Driver.objects.first() # mock fallback 
+            # Consistent with api/views.py driver_active lookup
+            driver_profile = Driver.objects.get(employee__user=request.user)
+        except Driver.DoesNotExist:
+             return Response({'error': 'Forbidden: Logged in user has no active driver profile.'}, status=403)
 
-        assignment = InboundCollectionAssignment.objects.get(
-            id=pk, driver=driver_profile
-        )
+        try:
+            assignment = InboundCollectionAssignment.objects.get(
+                id=pk, driver=driver_profile
+            )
         if assignment.status != 'assigned':
             return Response({'error': 'not_assignable'}, status=400)
         assignment.status     = 'accepted'

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from 'react-router-dom'; // Note: corrected import below
 import { MapContainer as LeafletMap, TileLayer as LeafletTile, Marker as LeafletMarker, Popup as LeafletPopup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../api';
@@ -9,7 +8,7 @@ import {
     MdAssignment, MdTimer, MdRadioButtonChecked, MdExpandMore
 } from "react-icons/md";
 import { 
-    Navigation, List, Activity, 
+    Navigation, List, Activity, Users,
     Shield, Clock, AlertCircle, CheckCircle2 
 } from "lucide-react";
 import toast from "react-hot-toast";
