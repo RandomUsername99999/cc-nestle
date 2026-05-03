@@ -1,5 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from django.utils import timezone
@@ -119,6 +120,8 @@ class DockAvailabilityView(APIView):
 
 
 class AssignmentAcceptView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, pk):
         try:
             # Consistent with api/views.py driver_active lookup
@@ -133,17 +136,28 @@ class AssignmentAcceptView(APIView):
         except InboundCollectionAssignment.DoesNotExist:
             return Response({'error': 'assignment_not_found'}, status=404)
 
+        # Idempotency: If already accepted or in transit, return success
+        if assignment.status in ['accepted', 'en_route', 'collected']:
+             return Response(AssignmentDetailSerializer(assignment).data)
+
         if assignment.status != 'assigned':
             return Response({'error': 'not_assignable'}, status=400)
+        
         assignment.status     = 'accepted'
         assignment.accepted_at = timezone.now()
         assignment.save(update_fields=['status', 'accepted_at'])
         return Response(AssignmentDetailSerializer(assignment).data)
 
 class DepartureConfirmView(APIView):
+    permission_classes = [IsAuthenticated]
+
     """Driver confirms they are leaving for the supplier — tracking starts."""
     def post(self, request, pk):
         assignment = InboundCollectionAssignment.objects.get(id=pk)
+
+        if assignment.status in ['en_route', 'collected', 'delivered']:
+             return Response({'success': True, 'status': assignment.status})
+
         assignment.status     = 'en_route'
         assignment.departed_at = timezone.now()
         
