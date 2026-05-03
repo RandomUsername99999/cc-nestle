@@ -59,19 +59,19 @@ class Command(BaseCommand):
 
             for _ in range(num_delivered):
                 Order.objects.create(
-                    customer_name=f"Test Customer {random.randint(100, 999)}",
-                    customer_phone="0711000000",
                     delivery_address=f"{random.randint(1, 100)} Analytics Street",
                     delivery_lat=-1.2920 + random.uniform(-0.05, 0.05),
                     delivery_lng=36.8219 + random.uniform(-0.05, 0.05),
                     weight_kg=random.uniform(5, 100),
                     quantity=random.randint(1, 10),
+                    volume_m3=random.uniform(0.1, 2.0),
                     status='delivered',
                     warehouse_id=str(warehouse.id),
                     warehouse_name=warehouse.name,
                     warehouse_address=warehouse.address or 'Main Warehouse',
                     warehouse_lat=warehouse.lat or -1.286389,
                     warehouse_lng=warehouse.lng or 36.817223,
+                    pickup_address=warehouse.address or 'Main Warehouse',
                     created_at=day - timedelta(hours=random.randint(1, 8)),
                     delivered_at=day,
                 )
@@ -79,19 +79,19 @@ class Command(BaseCommand):
 
             for _ in range(num_failed):
                 Order.objects.create(
-                    customer_name=f"Failed Customer {random.randint(100, 999)}",
-                    customer_phone="0722000000",
                     delivery_address=f"{random.randint(1, 100)} Fail Lane",
                     delivery_lat=-1.2920 + random.uniform(-0.05, 0.05),
                     delivery_lng=36.8219 + random.uniform(-0.05, 0.05),
                     weight_kg=random.uniform(5, 50),
                     quantity=random.randint(1, 5),
+                    volume_m3=random.uniform(0.1, 1.0),
                     status='delivery_failed',
                     warehouse_id=str(warehouse.id),
                     warehouse_name=warehouse.name,
                     warehouse_address=warehouse.address or 'Main Warehouse',
                     warehouse_lat=warehouse.lat or -1.286389,
                     warehouse_lng=warehouse.lng or 36.817223,
+                    pickup_address=warehouse.address or 'Main Warehouse',
                     created_at=day - timedelta(hours=random.randint(1, 6)),
                 )
                 created += 1
