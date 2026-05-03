@@ -1654,6 +1654,46 @@ class ReportViewSet(viewsets.ViewSet):
                 completed_trips=Count('shipment_id', filter=Q(status='completed'))
             ).order_by('-total_trips')[:5]
 
+            # 7. Dynamic Insights Generation
+            insights = []
+            
+            # Insight 1: Top Failure Reason
+            if failure_breakdown:
+                top_fail = failure_breakdown[0]
+                fail_label = top_fail['exception_type'].replace('_', ' ').title()
+                insights.append({
+                    "title": "Top Delay Pattern",
+                    "desc": f"'{fail_label}' is currently the leading cause of delivery exceptions. Consider investigating root causes.",
+                    "type": "warning"
+                })
+            
+            # Insight 2: Volume Trend
+            last_2_days = daily_trends[-2:]
+            if len(last_2_days) == 2:
+                yesterday = last_2_days[0]['orders']
+                today_count = last_2_days[1]['orders']
+                if today_count > yesterday:
+                    growth = ((today_count - yesterday) / yesterday * 100) if yesterday > 0 else 100
+                    insights.append({
+                        "title": "Rising Volume",
+                        "desc": f"Delivery demand has increased by {round(growth)}% since yesterday. Plan for additional fleet utilization.",
+                        "type": "info"
+                    })
+            
+            # Insight 3: Performance Milestone
+            if on_time_rate > 90:
+                insights.append({
+                    "title": "Efficiency Peak",
+                    "desc": "On-time delivery rates are exceeding targets. Excellent operational performance this week.",
+                    "type": "success"
+                })
+            elif on_time_rate < 70 and total_orders > 0:
+                insights.append({
+                    "title": "Efficiency Warning",
+                    "desc": "Delivery success rates have dropped below 70%. Review route planning and driver assignments.",
+                    "type": "warning"
+                })
+
             return Response({
                 "summary": {
                     "total_orders": total_orders,
@@ -1666,7 +1706,8 @@ class ReportViewSet(viewsets.ViewSet):
                 },
                 "trends": daily_trends,
                 "failures": list(failure_breakdown),
-                "driver_performance": list(driver_stats)
+                "driver_performance": list(driver_stats),
+                "insights": insights
             })
         except Exception as e:
             import traceback

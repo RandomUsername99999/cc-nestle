@@ -197,28 +197,28 @@ export default function DeliveryAnalytics() {
                     </div>
                 </div>
 
-                {/* Optimization Patterns */}
+                {/* Dynamic Insights from Backend */}
                 <div className="bg-white p-8 rounded-[40px] border border-coffee-100 shadow-sm">
                     <h3 className="text-lg font-black text-coffee-900 mb-6">Route Optimization Insights</h3>
                     <div className="space-y-4">
-                        <InsightItem 
-                            icon={Activity}
-                            title="Traffic Delay Hotspots"
-                            desc="CBD routes consistently report 15% higher transit times between 16:00 - 18:00."
-                            type="warning"
-                        />
-                        <InsightItem 
-                            icon={TrendingUp}
-                            title="Peak Season Readiness"
-                            desc="Delivery volume predicted to increase by 24% next month based on historical trends."
-                            type="info"
-                        />
-                        <InsightItem 
-                            icon={Users}
-                            title="Customer Satisfaction"
-                            desc="92% of customers reported high satisfaction when deliveries arrive before 11:00 AM."
-                            type="success"
-                        />
+                        {data.insights && data.insights.length > 0 ? data.insights.map((insight, idx) => {
+                            let Icon = Activity;
+                            if (insight.type === 'info') Icon = TrendingUp;
+                            if (insight.type === 'success') Icon = CheckCircle;
+                            if (insight.type === 'warning') Icon = AlertCircle;
+                            
+                            return (
+                                <InsightItem 
+                                    key={idx}
+                                    icon={Icon}
+                                    title={insight.title}
+                                    desc={insight.desc}
+                                    type={insight.type}
+                                />
+                            );
+                        }) : (
+                            <p className="text-sm text-coffee-400 text-center py-6 font-medium">Insufficient data to generate patterns yet.</p>
+                        )}
                     </div>
                 </div>
             </div>
