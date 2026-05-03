@@ -130,6 +130,9 @@ class AssignmentAcceptView(APIView):
             assignment = InboundCollectionAssignment.objects.get(
                 id=pk, driver=driver_profile
             )
+        except InboundCollectionAssignment.DoesNotExist:
+            return Response({'error': 'assignment_not_found'}, status=404)
+
         if assignment.status != 'assigned':
             return Response({'error': 'not_assignable'}, status=400)
         assignment.status     = 'accepted'
