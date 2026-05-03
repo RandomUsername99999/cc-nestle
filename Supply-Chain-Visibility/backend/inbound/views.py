@@ -136,12 +136,12 @@ class AssignmentAcceptView(APIView):
         except InboundCollectionAssignment.DoesNotExist:
             return Response({'error': 'assignment_not_found'}, status=404)
 
-        # Idempotency: If already accepted or in transit, return success
-        if assignment.status in ['accepted', 'en_route', 'collected']:
+        # Idempotency: If already accepted or beyond, return success
+        if assignment.status not in ['pending', 'assigned']:
              return Response(AssignmentDetailSerializer(assignment).data)
 
-        if assignment.status != 'assigned':
-            return Response({'error': 'not_assignable'}, status=400)
+        if assignment.status == 'pending':
+            return Response({'error': 'not_assignable_yet'}, status=400)
         
         assignment.status     = 'accepted'
         assignment.accepted_at = timezone.now()
@@ -155,7 +155,8 @@ class DepartureConfirmView(APIView):
     def post(self, request, pk):
         assignment = InboundCollectionAssignment.objects.get(id=pk)
 
-        if assignment.status in ['en_route', 'collected', 'delivered']:
+        # Idempotency: If already en route or beyond, return success
+        if assignment.status not in ['pending', 'assigned', 'accepted']:
              return Response({'success': True, 'status': assignment.status})
 
         assignment.status     = 'en_route'
@@ -196,17 +197,26 @@ class SupplierArrivalScanView(APIView):
             token,
             expected_supplier_id=str(assignment.manifest.supplier_id)
         )
+        if assignment.status in ['at_supplier', 'verifying', 'returning', 'completed']:
+             # Already arrived
+             line_items = assignment.manifest.line_items.all()
+             return Response(self._prepare_arrival_data(assignment, line_items))
+
         if not result['valid']:
-            return Response({'error': result['reason']}, status=400)
+             return Response({'error': result['reason']}, status=400)
 
         assignment.status              = 'at_supplier'
         assignment.arrived_at_supplier = timezone.now()
         assignment.save(update_fields=['status', 'arrived_at_supplier'])
 
         line_items = assignment.manifest.line_items.all()
-        return Response({
+        return Response(self._prepare_arrival_data(assignment, line_items))
+
+    def _prepare_arrival_data(self, assignment, line_items):
+        return {
             'assignment_id': str(assignment.id),
             'supplier':      {'name': assignment.manifest.supplier.name,
+                              'address': assignment.manifest.supplier.address,
                               'contact': assignment.manifest.supplier.contact_phone},
             'special_handling': assignment.manifest.special_handling,
             'temperature_range': {
@@ -226,7 +236,7 @@ class SupplierArrivalScanView(APIView):
                 }
                 for li in line_items
             ],
-        })
+        }
 
 class ItemScanView(APIView):
     def post(self, request, pk):
