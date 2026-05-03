@@ -67,11 +67,11 @@ class Command(BaseCommand):
                     weight_kg=random.uniform(5, 100),
                     quantity=random.randint(1, 10),
                     status='delivered',
-                    warehouse_id=warehouse.warehouse_id,
+                    warehouse_id=str(warehouse.id),
                     warehouse_name=warehouse.name,
                     warehouse_address=warehouse.address or 'Main Warehouse',
-                    warehouse_lat=warehouse.latitude or -1.286389,
-                    warehouse_lng=warehouse.longitude or 36.817223,
+                    warehouse_lat=warehouse.lat or -1.286389,
+                    warehouse_lng=warehouse.lng or 36.817223,
                     created_at=day - timedelta(hours=random.randint(1, 8)),
                     delivered_at=day,
                 )
@@ -87,11 +87,11 @@ class Command(BaseCommand):
                     weight_kg=random.uniform(5, 50),
                     quantity=random.randint(1, 5),
                     status='delivery_failed',
-                    warehouse_id=warehouse.warehouse_id,
+                    warehouse_id=str(warehouse.id),
                     warehouse_name=warehouse.name,
                     warehouse_address=warehouse.address or 'Main Warehouse',
-                    warehouse_lat=warehouse.latitude or -1.286389,
-                    warehouse_lng=warehouse.longitude or 36.817223,
+                    warehouse_lat=warehouse.lat or -1.286389,
+                    warehouse_lng=warehouse.lng or 36.817223,
                     created_at=day - timedelta(hours=random.randint(1, 6)),
                 )
                 created += 1
@@ -100,15 +100,20 @@ class Command(BaseCommand):
 
     def _seed_exceptions(self):
         from api.models import OrderException, Order
+        from drivers.models import Driver
 
         exception_types = [
-            'wrong_address',
-            'customer_unavailable',
-            'damaged_goods',
-            'refused_delivery',
+            'address_not_found',
+            'no_answer',
+            'damaged',
+            'refused',
             'vehicle_breakdown',
         ]
-        weights = [30, 25, 15, 20, 10]  # probability weights
+        
+        driver = Driver.objects.first()
+        if not driver:
+            self.stdout.write(self.style.WARNING('  No driver found — skipping exceptions.'))
+            return
 
         failed_orders = Order.objects.filter(status='delivery_failed')
         if not failed_orders.exists():
@@ -117,13 +122,15 @@ class Command(BaseCommand):
 
         created = 0
         for order in failed_orders:
-            exc_type = random.choices(exception_types, weights=weights, k=1)[0]
+            exc_type = random.choice(exception_types)
             OrderException.objects.get_or_create(
                 order=order,
                 defaults={
                     'exception_type': exc_type,
                     'notes': f'Auto-seeded: {exc_type.replace("_", " ").title()}',
-                    'reported_at': order.created_at + timedelta(hours=2),
+                    'driver': driver,
+                    'location_lat': order.delivery_lat,
+                    'location_lng': order.delivery_lng,
                 }
             )
             created += 1
