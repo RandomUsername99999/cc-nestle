@@ -1,25 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { BiBox, BiCheckCircle, BiErrorCircle, BiPointer, BiRefresh, BiUser, BiSearch, BiPackage, BiBadgeCheck, BiInfoCircle, BiChevronRight, BiChevronDown, BiCalendar, BiTime, BiMapPin, BiShieldAlt, BiArchive } from 'react-icons/bi';
-import { GiTruck, GiWeight, GiResize, GiGears } from 'react-icons/gi';
-import { HiOutlineCube, HiOutlineTruck, HiOutlineAdjustmentsHorizontal, HiOutlineMap, HiOutlineSquaresPlus } from 'react-icons/hi2';
-import { HiOutlineExclamation, HiOutlineSun } from 'react-icons/hi';
-import { LuPackageSearch, LuRadar } from 'react-icons/lu';
-import { Truck, Package, MapPin, AlertCircle, CheckCircle, Clock, Calendar, ShieldAlert } from 'lucide-react';
+import { BiBox, BiErrorCircle, BiRefresh, BiUser, BiSearch, BiPackage, BiChevronRight, BiChevronDown, BiCalendar, BiTime, BiMapPin } from 'react-icons/bi';
+import { GiTruck } from 'react-icons/gi';
+import { HiOutlineTruck, HiOutlineAdjustmentsHorizontal, HiOutlineSquaresPlus } from 'react-icons/hi2';
+import { LuRadar } from 'react-icons/lu';
+import { AlertCircle, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
-import FilterPanel from '../components/FilterPanel';
+import toast from 'react-hot-toast';
 
 export default function DispatchPlanning() {
-  const [activePlanType, setActivePlanType] = useState('outbound'); // outbound, inbound
+  const [activePlanType] = useState('outbound'); // outbound, inbound
   const [orders, setOrders] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [warehouses, setWarehouses] = useState({});
+  const [, setWarehouses] = useState({});
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fillSuggestions, setFillSuggestions] = useState([]);
   const [showFillModal, setShowFillModal] = useState(false);
-  const [activeClusterId, setActiveClusterId] = useState(null);
+  const [, setActiveClusterId] = useState(null);
   const [clusterMap, setClusterMap] = useState({});
   const [vSearchQuery, setVSearchQuery] = useState('');
 
@@ -32,22 +31,23 @@ export default function DispatchPlanning() {
   const [pickupTime, setPickupTime] = useState('');
   const [dockNumber, setDockNumber] = useState('');
   const [isDockAvailable, setIsDockAvailable] = useState(null);
-  const [isValidatingDock, setIsValidatingDock] = useState(false);
+  const [, setIsValidatingDock] = useState(false);
   const [assignStep, setAssignStep] = useState(1);
 
   // Outbound Deployment States
   const [showDeploymentPanel, setShowDeploymentPanel] = useState(false);
   const [deploymentTime, setDeploymentTime] = useState('');
   const [deploymentDock, setDeploymentDock] = useState('');
-  const [isValidatingOutboundDock, setIsValidatingOutboundDock] = useState(false);
+  const [, setIsValidatingOutboundDock] = useState(false);
   const [isOutboundDockAvailable, setIsOutboundDockAvailable] = useState(null);
 
   useEffect(() => {
     fetchData();
     fetchInboundManifests();
-  }, []);
+  }, [fetchData, fetchInboundManifests]);
 
-  const handleDeleteManifest = (id) => { if(window.confirm('Purge?')) { api.delete('inbound/manifests/'+id+'/').then(()=>fetchInboundManifests()); } }; const fetchInboundManifests = async () => {
+  // const handleDeleteManifest = (id) => { if(window.confirm('Purge?')) { api.delete('inbound/manifests/'+id+'/').then(()=>fetchInboundManifests()); } }; 
+  const fetchInboundManifests = async () => {
     try {
       const response = await api.get('inbound/manifests/');
       setManifests(response.data || []);
@@ -240,7 +240,7 @@ export default function DispatchPlanning() {
   const weightPercent = selectedVehicleData && selectedVehicleData.capacity ? Math.min(100, (totalWeight / parseFloat(selectedVehicleData.capacity)) * 100) : 0;
   const volumePercent = selectedVehicleData && selectedVehicleData.volume ? Math.min(100, (totalVolume / parseFloat(selectedVehicleData.volume)) * 100) : 0;
 
-  const fetchFillSuggestions = async (vId, cId) => {
+  /* const fetchFillSuggestions = async (vId, cId) => {
     try {
       const resp = await api.get(`vehicles/${vId}/capacity_fill_suggestions/?cluster_id=${cId}`);
       setFillSuggestions(resp.data);
@@ -407,7 +407,7 @@ export default function DispatchPlanning() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [orderSearchQuery]);
+  }, [orderSearchQuery, fetchData]);
 
   return (
     <div className="min-h-screen bg-[#F8F7F4] pb-20 max-w-[1600px] mx-auto px-4 sm:px-12 animate-fade-in font-sans">

@@ -1609,35 +1609,76 @@ class ReportViewSet(viewsets.ViewSet):
             from django.db.models import Count, Avg, Sum, F, ExpressionWrapper, DurationField
             from django.utils import timezone
             from datetime import timedelta
+            from .filters import DeliverySearchFilter
+            
+            # Apply filters to querysets
+            order_filter = DeliverySearchFilter(request.GET, queryset=Order.objects.all())
+            orders_qs = order_filter.qs
+            
+            # Filter shipments based on similar logic
+            shipments_qs = Shipment.objects.all()
+            if request.GET.get('driver_id'):
+                shipments_qs = shipments_qs.filter(driver_id=request.GET.get('driver_id'))
+            if request.GET.get('vehicle_id'):
+                shipments_qs = shipments_qs.filter(vehicle_id=request.GET.get('vehicle_id'))
+            if request.GET.get('date_from'):
+                shipments_qs = shipments_qs.filter(created_at__gte=request.GET.get('date_from'))
+            if request.GET.get('date_to'):
+                shipments_qs = shipments_qs.filter(created_at__lte=request.GET.get('date_to'))
+                
+            # Filter exceptions based on filtered orders
+            exceptions_qs = OrderException.objects.filter(order__in=orders_qs)
             
             # 1. High Level Delivery Metrics
-            total_orders = Order.objects.count()
-            delivered = Order.objects.filter(status='delivered').count()
-            failed = Order.objects.filter(status='delivery_failed').count()
+            total_orders = orders_qs.count()
+            delivered = orders_qs.filter(status='delivered').count()
+            failed = orders_qs.filter(status='delivery_failed').count()
             on_time_rate = (delivered / total_orders * 100) if total_orders > 0 else 0
             
             # 2. Financial Metrics (Fuel & Cost)
-            total_fuel_cost = FuelExpense.objects.aggregate(total=Sum('total_cost'))['total'] or 0
-            total_fuel_liters = FuelExpense.objects.aggregate(total=Sum('liters'))['total'] or 0
+            # Fuel costs are harder to filter by specific orders, but we can filter by date/vehicle if provided
+            fuel_qs = FuelExpense.objects.all()
+            if request.GET.get('vehicle_id'):
+                fuel_qs = fuel_qs.filter(vehicle_id=request.GET.get('vehicle_id'))
+            if request.GET.get('date_from'):
+                fuel_qs = fuel_qs.filter(expense_date__gte=request.GET.get('date_from'))
+            if request.GET.get('date_to'):
+                fuel_qs = fuel_qs.filter(expense_date__lte=request.GET.get('date_to'))
+                
+            total_fuel_cost = fuel_qs.aggregate(total=Sum('total_cost'))['total'] or 0
+            total_fuel_liters = fuel_qs.aggregate(total=Sum('liters'))['total'] or 0
             avg_cost_per_delivery = (float(total_fuel_cost) / delivered) if delivered > 0 else 0
             
             # 3. Time & Route Efficiency
-            # Average time on route: completed_at - accepted_at
-            completed_shipments = Shipment.objects.filter(status='completed', accepted_at__isnull=False, completed_at__isnull=False)
+            completed_shipments = shipments_qs.filter(status='completed', accepted_at__isnull=False, completed_at__isnull=False)
             avg_duration = completed_shipments.annotate(
                 duration=ExpressionWrapper(F('completed_at') - F('accepted_at'), output_field=DurationField())
             ).aggregate(avg=Avg('duration'))['avg']
             
             avg_duration_minutes = avg_duration.total_seconds() / 60 if avg_duration else 0
             
-            # 4. Trends (Last 7 Days)
-            today = timezone.now().date()
-            seven_days_ago = today - timedelta(days=7)
+            # 4. Trends
+            # Use provided date range or default to last 7 days
+            if request.GET.get('date_from') and request.GET.get('date_to'):
+                try:
+                    start_date = timezone.datetime.fromisoformat(request.GET.get('date_from')).date()
+                    end_date = timezone.datetime.fromisoformat(request.GET.get('date_to')).date()
+                    days_diff = (end_date - start_date).days + 1
+                    if days_diff > 31: days_diff = 31 # Cap at 31 days
+                    trend_days = days_diff
+                    base_date = start_date
+                except:
+                    trend_days = 7
+                    base_date = timezone.now().date() - timedelta(days=7)
+            else:
+                trend_days = 7
+                base_date = timezone.now().date() - timedelta(days=7)
+
             daily_trends = []
-            for i in range(7):
-                day = seven_days_ago + timedelta(days=i)
-                count = Order.objects.filter(created_at__date=day).count()
-                deliv = Order.objects.filter(delivered_at__date=day).count()
+            for i in range(trend_days):
+                day = base_date + timedelta(days=i)
+                count = orders_qs.filter(created_at__date=day).count()
+                deliv = orders_qs.filter(delivered_at__date=day).count()
                 daily_trends.append({
                     "date": day.strftime('%Y-%m-%d'),
                     "orders": count,
@@ -1645,19 +1686,17 @@ class ReportViewSet(viewsets.ViewSet):
                 })
                 
             # 5. Failure Reasons Breakdown
-            failure_breakdown = OrderException.objects.values('exception_type').annotate(count=Count('exception_id')).order_by('-count')
+            failure_breakdown = exceptions_qs.values('exception_type').annotate(count=Count('exception_id')).order_by('-count')
             
             # 6. Driver Utilization
             from django.db.models import Q
-            driver_stats = Shipment.objects.values('driver__employee__full_name').annotate(
+            driver_stats = shipments_qs.values('driver__employee__full_name').annotate(
                 total_trips=Count('shipment_id'),
                 completed_trips=Count('shipment_id', filter=Q(status='completed'))
             ).order_by('-total_trips')[:5]
 
             # 7. Dynamic Insights Generation
             insights = []
-            
-            # Insight 1: Top Failure Reason
             if failure_breakdown:
                 top_fail = failure_breakdown[0]
                 fail_label = top_fail['exception_type'].replace('_', ' ').title()
@@ -1667,9 +1706,8 @@ class ReportViewSet(viewsets.ViewSet):
                     "type": "warning"
                 })
             
-            # Insight 2: Volume Trend
-            last_2_days = daily_trends[-2:]
-            if len(last_2_days) == 2:
+            if len(daily_trends) >= 2:
+                last_2_days = daily_trends[-2:]
                 yesterday = last_2_days[0]['orders']
                 today_count = last_2_days[1]['orders']
                 if today_count > yesterday:
@@ -1680,7 +1718,6 @@ class ReportViewSet(viewsets.ViewSet):
                         "type": "info"
                     })
             
-            # Insight 3: Performance Milestone
             if on_time_rate > 90:
                 insights.append({
                     "title": "Efficiency Peak",

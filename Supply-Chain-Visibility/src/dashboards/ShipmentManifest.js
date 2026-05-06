@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import api from "../api";
 import { 
-    BiSearch, BiFilterAlt, BiPackage, BiUser, 
-    BiMapPin, BiCheckDouble, BiTimeFive, BiChevronRight, BiCube, BiSelection, BiX, BiDownload
+    BiSearch, BiPackage, BiUser, 
+    BiCheckDouble, BiTimeFive, BiChevronRight, BiCube, BiSelection, BiX, BiDownload
 } from "react-icons/bi";
 import { GiTruck } from "react-icons/gi";
 import { toast } from "react-hot-toast";
@@ -14,6 +14,7 @@ const ShipmentManifest = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedShipment, setSelectedShipment] = useState(null);
     const [zoomedQR, setZoomedQR] = useState(null);
+    const [orderFilter, setOrderFilter] = useState('assigned');
 
     useEffect(() => {
         fetchShipments();
@@ -76,7 +77,12 @@ const ShipmentManifest = () => {
         s.shipment_id.toString().includes(searchTerm) || 
         s.vehicle_plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.driver_name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    ).filter(s => {
+        if (orderFilter === 'assigned') return ['planned', 'dispatched'].includes(s.status);
+        if (orderFilter === 'in_transit') return ['in_transit'].includes(s.status);
+        if (orderFilter === 'delivered') return ['completed'].includes(s.status);
+        return true;
+    });
 
     return (
         <div className="space-y-8 animate-fade-in px-4 relative">
@@ -142,6 +148,18 @@ const ShipmentManifest = () => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="flex-1 bg-transparent border-none text-sm font-medium focus:outline-none placeholder-coffee-200"
                         />
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-white p-1.5 rounded-3xl w-max border border-coffee-100 shadow-sm">
+                        {['assigned', 'in_transit', 'delivered'].map(tab => (
+                            <button 
+                                key={tab}
+                                onClick={() => setOrderFilter(tab)}
+                                className={`px-8 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${orderFilter === tab ? 'bg-coffee-900 text-white shadow-sm border border-coffee-800' : 'text-coffee-400 hover:text-coffee-600'}`}
+                            >
+                                {tab === 'assigned' ? 'Assigned' : tab === 'in_transit' ? 'Picked Up' : 'Delivered'}
+                            </button>
+                        ))}
                     </div>
 
                     <div className="space-y-4">

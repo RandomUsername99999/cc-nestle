@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../api";
-import { BiHistory, BiSearch, BiDetail, BiFilterAlt, BiInfoCircle, BiShieldQuarter } from "react-icons/bi";
+import { BiHistory, BiSearch, BiDetail, BiFilterAlt, BiShieldQuarter } from "react-icons/bi";
 import { HiOutlineShieldCheck } from "react-icons/hi";
 import toast from 'react-hot-toast';
 

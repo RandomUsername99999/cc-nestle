@@ -1,5 +1,5 @@
 import { SlSettings } from 'react-icons/sl';
-import { BiBell, BiUser, BiMenu, BiSearch, BiHistory, BiPackage, BiSelection } from 'react-icons/bi';
+import { BiUser, BiMenu, BiSearch, BiHistory, BiPackage, BiSelection } from 'react-icons/bi';
 import { GiTruck, GiPathDistance } from 'react-icons/gi';
 import { MdDashboard, MdMap, MdLocationOn } from 'react-icons/md';
 import logo from './assets/images/logo.svg';

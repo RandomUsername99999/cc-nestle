@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Package, MapPin, AlertCircle, CheckCircle, Clock, Calendar, ShieldAlert } from 'lucide-react';
+import { Truck, MapPin, AlertCircle } from 'lucide-react';
 import { db, isFirebaseConfigured } from '../firebase';
 import { ref, onValue } from 'firebase/database';
-import api from '../api';
-import toast from 'react-hot-toast';
 
 const InboundProcurement = () => {
     const [activeTab, setActiveTab] = useState('active'); // active, logs
     const [activeRuns, setActiveRuns] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [activeRuns, setActiveRuns] = useState([]);
 
 
     useEffect(() => {
@@ -20,12 +18,9 @@ const InboundProcurement = () => {
                     const data = snapshot.val();
                     setActiveRuns(Object.entries(data).map(([id, info]) => ({ id, ...info })));
                 }
-                setIsLoading(false);
             });
 
             return () => unsubscribe();
-        } else {
-            setIsLoading(false);
         }
     }, []);
 

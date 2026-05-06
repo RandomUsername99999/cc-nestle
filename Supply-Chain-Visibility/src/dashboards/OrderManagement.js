@@ -6,7 +6,7 @@ import {
 } from "react-icons/bi";
 import { toast } from "react-hot-toast";
 import FilterPanel from "../components/FilterPanel";
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { QRCodeSVG } from 'qrcode.react';
@@ -33,6 +33,7 @@ const OrderManagement = () => {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentOrder, setCurrentOrder] = useState(null);
+    const [orderFilter, setOrderFilter] = useState('assigned');
 
     // Form State
     const [formData, setFormData] = useState({
@@ -172,6 +173,20 @@ const OrderManagement = () => {
                 <div className="p-3 border-b border-coffee-50 bg-coffee-50/20">
                    <FilterPanel onFilter={fetchOrders} entityType="orders" />
                 </div>
+                
+                <div className="p-4 border-b border-coffee-50">
+                    <div className="flex items-center gap-3 bg-coffee-50/50 p-1.5 rounded-3xl w-max">
+                        {['assigned', 'in_transit', 'delivered'].map(tab => (
+                            <button 
+                                key={tab}
+                                onClick={() => setOrderFilter(tab)}
+                                className={`px-8 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${orderFilter === tab ? 'bg-white text-coffee-950 shadow-sm border border-coffee-200' : 'text-coffee-400 hover:text-coffee-600'}`}
+                            >
+                                {tab === 'assigned' ? 'Assigned' : tab === 'in_transit' ? 'Picked Up' : 'Delivered'}
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -190,11 +205,21 @@ const OrderManagement = () => {
                                 <tr>
                                     <td colSpan="6" className="px-6 py-10 text-center text-coffee-300 text-sm">Synchronizing registry...</td>
                                 </tr>
-                            ) : orders.length === 0 ? (
+                            ) : orders.filter(o => {
+                                if (orderFilter === 'assigned') return ['pending', 'assigned', 'delayed'].includes(o.status);
+                                if (orderFilter === 'in_transit') return ['in_transit'].includes(o.status);
+                                if (orderFilter === 'delivered') return ['delivered'].includes(o.status);
+                                return true;
+                            }).length === 0 ? (
                                 <tr>
-                                    <td colSpan="6" className="px-6 py-10 text-center text-coffee-300 text-sm">No matching order records found.</td>
+                                    <td colSpan="6" className="px-6 py-10 text-center text-coffee-300 text-sm">No matching order records found for this status.</td>
                                 </tr>
-                            ) : orders.map(order => (
+                            ) : orders.filter(o => {
+                                if (orderFilter === 'assigned') return ['pending', 'assigned', 'delayed'].includes(o.status);
+                                if (orderFilter === 'in_transit') return ['in_transit'].includes(o.status);
+                                if (orderFilter === 'delivered') return ['delivered'].includes(o.status);
+                                return true;
+                            }).map(order => (
                                 <tr key={order.order_id} className="hover:bg-coffee-50/10 transition-all group">
                                     <td className="px-6 py-5">
                                         <div className="flex items-center gap-3">
