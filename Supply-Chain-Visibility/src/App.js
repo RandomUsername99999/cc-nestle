@@ -19,6 +19,7 @@ import Profile from './dashboards/Profile';
 import Settings from './dashboards/Settings';
 import ManagerDashboard from './dashboards/ManagerDashboard';
 import SupplierDeliveryManagement from './dashboards/SupplierDeliveryManagement';
+import AdvancedSearch from './dashboards/AdvancedSearch';
 
 import api from './api';
 import './App.css';
@@ -166,7 +167,7 @@ function App() {
           <Route path='/admin/users' element={role === 'admin' ? <UserManagement /> : <Navigate to='/admin/dashboard' />} />
           <Route path='/admin/vehicles' element={['admin', 'manager', 'dispatcher'].includes(role) ? <VehicleManagement /> : <Navigate to='/admin/dashboard' />} />
           <Route path='/admin/audit' element={role === 'admin' ? <AuditLog /> : <Navigate to='/admin/dashboard' />} />
-          <Route path='/admin/search' element={['admin', 'manager'].includes(role) ? <div className="p-8"><h1 className="text-2xl font-bold">Advanced Search</h1><p>Manager console for data mining.</p></div> : <Navigate to='/admin/dashboard' />} />
+          <Route path='/admin/search' element={['admin', 'manager'].includes(role) ? <AdvancedSearch /> : <Navigate to='/admin/dashboard' />} />
           <Route path='/admin/profile' element={<Profile />} />
           <Route path='/admin/settings' element={<Settings />} />
           <Route path='/admin/supplier-deliveries' element={['manager', 'dispatcher'].includes(role) ? <SupplierDeliveryManagement /> : <Navigate to='/admin/dashboard' />} />
