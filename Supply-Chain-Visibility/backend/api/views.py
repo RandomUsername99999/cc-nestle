@@ -1,5 +1,6 @@
 from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.views import APIView
+from django.db.models import Q
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -1345,6 +1346,86 @@ class DeliverySearchView(APIView):
             'count': results.count(),
             'results': serializer.data,
         })
+
+class UniversalSearchView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        query = request.query_params.get('q', '')
+        search_type = request.query_params.get('type', 'all')
+        
+        if not query:
+            return Response([])
+
+        results = []
+
+        # Orders
+        if search_type in ['all', 'orders']:
+            orders = Order.objects.filter(
+                Q(order_id__icontains=query) |
+                Q(pickup_address__icontains=query) |
+                Q(delivery_address__icontains=query) |
+                Q(warehouse_name__icontains=query)
+            )[:20]
+            for o in orders:
+                results.append({
+                    'type': 'order',
+                    'data': OrderSerializer(o).data
+                })
+
+        # Vehicles
+        if search_type in ['all', 'vehicles']:
+            vehicles = Vehicle.objects.filter(
+                Q(plate_number__icontains=query) |
+                Q(vehicle_type__icontains=query) |
+                Q(manufacturer__icontains=query) |
+                Q(model__icontains=query)
+            )[:20]
+            for v in vehicles:
+                results.append({
+                    'type': 'vehicle',
+                    'data': VehicleSerializer(v).data
+                })
+
+        # Shipments
+        if search_type in ['all', 'shipments']:
+            shipments = Shipment.objects.filter(
+                Q(shipment_id__icontains=query) |
+                Q(status__icontains=query) |
+                Q(shipment_type__icontains=query)
+            )[:20]
+            for s in shipments:
+                results.append({
+                    'type': 'shipment',
+                    'data': ShipmentSerializer(s).data
+                })
+
+        # Users
+        if search_type in ['all', 'users']:
+            users = CustomUser.objects.filter(
+                Q(username__icontains=query) |
+                Q(email__icontains=query)
+            )[:20]
+            for u in users:
+                results.append({
+                    'type': 'user',
+                    'data': UserSerializer(u).data
+                })
+
+        # Audit Logs
+        if search_type in ['all', 'audits']:
+            audits = AuditLog.objects.filter(
+                Q(action__icontains=query) |
+                Q(resource_type__icontains=query) |
+                Q(details__icontains=query)
+            ).order_by('-timestamp')[:20]
+            for a in audits:
+                results.append({
+                    'type': 'audit',
+                    'data': AuditLogSerializer(a).data
+                })
+
+        return Response(results)
 
 class LiveVehicleView(APIView):
     permission_classes = [permissions.IsAuthenticated]

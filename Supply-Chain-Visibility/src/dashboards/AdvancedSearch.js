@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import api from '../api';
 import { 
     BiSearch, BiFilterAlt, BiDownload, BiSearchAlt, 
-    BiPackage, BiUser, BiMapPin, BiTime, BiDetail
+    BiPackage, BiUser, BiDetail
 } from 'react-icons/bi';
 import { Truck, AlertCircle, FileText, Activity } from 'lucide-react';
 import toast from 'react-hot-toast';

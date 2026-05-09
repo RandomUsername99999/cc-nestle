@@ -6,7 +6,6 @@ import { HiOutlineTruck, HiOutlineAdjustmentsHorizontal, HiOutlineSquaresPlus } 
 import { LuRadar } from 'react-icons/lu';
 import { AlertCircle, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
-import toast from 'react-hot-toast';
 
 export default function DispatchPlanning() {
   const [activePlanType] = useState('outbound'); // outbound, inbound
@@ -15,7 +14,7 @@ export default function DispatchPlanning() {
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [, setWarehouses] = useState({});
   const [selectedOrders, setSelectedOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(false);
   const [fillSuggestions, setFillSuggestions] = useState([]);
   const [showFillModal, setShowFillModal] = useState(false);
   const [, setActiveClusterId] = useState(null);
@@ -41,10 +40,7 @@ export default function DispatchPlanning() {
   const [, setIsValidatingOutboundDock] = useState(false);
   const [isOutboundDockAvailable, setIsOutboundDockAvailable] = useState(null);
 
-  useEffect(() => {
-    fetchData();
-    fetchInboundManifests();
-  }, [fetchData, fetchInboundManifests]);
+  // Initial data synchronization
 
   // const handleDeleteManifest = (id) => { if(window.confirm('Purge?')) { api.delete('inbound/manifests/'+id+'/').then(()=>fetchInboundManifests()); } }; 
   const fetchInboundManifests = async () => {
@@ -121,7 +117,7 @@ export default function DispatchPlanning() {
   }, [deploymentDock, deploymentTime]);
 
   const fetchData = async (params = {}) => {
-    setLoading(true);
+    setIsDataLoading(true);
     try {
       const hasQueryParams = params.q || params.status || params.requires_refrigeration;
       const orderEndpoint = hasQueryParams ? 'search/deliveries/' : 'orders/';
@@ -186,9 +182,16 @@ export default function DispatchPlanning() {
     } catch (err) {
       toast.error("Failed to load dispatch data");
     } finally {
-      setLoading(false);
+      setIsDataLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+    fetchInboundManifests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const handleOrderToggle = (orderId) => {
     const orderToToggle = orders.find(o => o.order_id === orderId);
@@ -240,7 +243,7 @@ export default function DispatchPlanning() {
   const weightPercent = selectedVehicleData && selectedVehicleData.capacity ? Math.min(100, (totalWeight / parseFloat(selectedVehicleData.capacity)) * 100) : 0;
   const volumePercent = selectedVehicleData && selectedVehicleData.volume ? Math.min(100, (totalVolume / parseFloat(selectedVehicleData.volume)) * 100) : 0;
 
-  /* const fetchFillSuggestions = async (vId, cId) => {
+  const fetchFillSuggestions = async (vId, cId) => {
     try {
       const resp = await api.get(`vehicles/${vId}/capacity_fill_suggestions/?cluster_id=${cId}`);
       setFillSuggestions(resp.data);
@@ -289,7 +292,7 @@ export default function DispatchPlanning() {
       return;
     }
 
-    setLoading(true);
+    setIsDataLoading(true);
     try {
       await api.post('shipments/deploy_manifest/', {
         order_ids: selectedOrders,
@@ -307,7 +310,7 @@ export default function DispatchPlanning() {
     } catch (err) {
       toast.error(err.response?.data?.error || "Execution Bridge Failure: Deployment Aborted");
     } finally {
-      setLoading(false);
+      setIsDataLoading(false);
     }
   };
 
@@ -316,7 +319,7 @@ export default function DispatchPlanning() {
       toast.error("Constraint Violation: Dock slot occupied for selected window.");
       return;
     }
-    setLoading(true);
+    setIsDataLoading(true);
     try {
       await api.post(`inbound/manifests/${selectedManifest.id}/assign/`, {
         driver_id: selectedInboundDriver,
@@ -333,7 +336,7 @@ export default function DispatchPlanning() {
       setAssignmentPanelOpen(false);
       fetchInboundManifests();
     } finally {
-      setLoading(false);
+      setIsDataLoading(false);
     }
   };
 
@@ -407,7 +410,8 @@ export default function DispatchPlanning() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [orderSearchQuery, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderSearchQuery]);
 
   return (
     <div className="min-h-screen bg-[#F8F7F4] pb-20 max-w-[1600px] mx-auto px-4 sm:px-12 animate-fade-in font-sans">
@@ -425,7 +429,7 @@ export default function DispatchPlanning() {
             onClick={() => activePlanType === 'outbound' ? fetchData() : fetchInboundManifests()}
             className="bg-white hover:bg-coffee-50 text-coffee-950 border border-coffee-100 px-6 py-3 rounded-full shadow-sm text-[10px] font-black uppercase tracking-widest transition-all flex items-center group gap-2"
           >
-            <BiRefresh className={`text-lg ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} /> Sync
+            <BiRefresh className={`text-lg ${isDataLoading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} /> Sync
           </button>
         </div>
       </header>
@@ -892,7 +896,7 @@ export default function DispatchPlanning() {
                         <button onClick={() => setAssignStep(1)} className="flex-1 py-5 bg-coffee-50 hover:bg-coffee-100 text-coffee-800 font-black uppercase text-[10px] tracking-widest rounded-[24px] transition-all">Back</button>
                         <button 
                             onClick={handleAssignInbound} 
-                            disabled={!pickupTime || !dockNumber || isDockAvailable === false || loading} 
+                            disabled={!pickupTime || !dockNumber || isDockAvailable === false || isDataLoading} 
                             className="flex-1 py-5 bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest rounded-[24px] transition-all shadow-xl shadow-emerald-950/20 disabled:opacity-50"
                         >
                             Finalize Deployment
@@ -992,10 +996,10 @@ export default function DispatchPlanning() {
             <div className="mt-auto pt-10">
               <button 
                 onClick={finalizeDeployment}
-                disabled={!deploymentTime || !deploymentDock || isOutboundDockAvailable === false || loading}
+                disabled={!deploymentTime || !deploymentDock || isOutboundDockAvailable === false || isDataLoading}
                 className="w-full py-6 bg-coffee-950 text-white font-black uppercase text-[11px] tracking-widest rounded-[32px] transition-all shadow-2xl shadow-coffee-900/40 active:scale-95 disabled:opacity-30 disabled:shadow-none"
               >
-                {loading ? 'Processing...' : 'Confirm & Deploy Fleet'}
+                {isDataLoading ? 'Processing...' : 'Confirm & Deploy Fleet'}
               </button>
               <p className="text-center text-[9px] font-black text-coffee-300 uppercase tracking-[0.2em] mt-6">
                 Broadcast notification will be sent to driver

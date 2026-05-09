@@ -6,7 +6,6 @@ import { ref, onValue } from 'firebase/database';
 const InboundProcurement = () => {
     const [activeTab, setActiveTab] = useState('active'); // active, logs
     const [activeRuns, setActiveRuns] = useState([]);
-    const [activeRuns, setActiveRuns] = useState([]);
 
 
     useEffect(() => {

@@ -4,7 +4,7 @@ import { db, isFirebaseConfigured } from "../firebase";
 import { ref, onValue } from "firebase/database";
 import { 
     BiSearch, BiCube, BiFilterAlt, BiRefresh,
-    BiDownload
+    BiDownload, BiTrendingUp
 } from "react-icons/bi";
 import { 
     Truck, Package, MapPin, AlertCircle, CheckCircle, 

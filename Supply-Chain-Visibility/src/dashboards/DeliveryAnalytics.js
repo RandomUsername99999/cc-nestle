@@ -24,7 +24,7 @@ export default function DeliveryAnalytics() {
         requires_refrigeration: ''
     });
 
-    const fetchAnalytics = async (params = filters) => {
+    const fetchAnalytics = React.useCallback(async (params = filters) => {
         setLoading(true);
         try {
             // Remove empty strings from params
@@ -37,11 +37,11 @@ export default function DeliveryAnalytics() {
             toast.error("Failed to load analytics data");
         }
         setLoading(false);
-    };
+    }, [filters]);
 
     useEffect(() => {
         fetchAnalytics();
-    }, []);
+    }, [fetchAnalytics]);
 
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({ ...prev, [key]: value }));

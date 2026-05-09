@@ -10,7 +10,7 @@ from .views import (
     CustomTokenObtainPairView, OrderViewSet, AuditLogViewSet, 
     dispatch_recommendations, ShipmentViewSet,
     DeliverySearchView, LiveVehicleView, OrderAuditView, ChangePasswordView,
-    ProofOfDeliveryViewSet, ReportViewSet, OrderExceptionViewSet
+    ProofOfDeliveryViewSet, ReportViewSet, OrderExceptionViewSet, UniversalSearchView
 )
 from .serializers import UserSerializer, VehicleSerializer, VehicleAssignmentSerializer
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -44,5 +44,6 @@ urlpatterns = [
     path('search/deliveries/', DeliverySearchView.as_view()),
     path('search/live-vehicles/', LiveVehicleView.as_view()),
     path('search/audit/<int:order_id>/', OrderAuditView.as_view()),
+    path('search/', UniversalSearchView.as_view()),
     path('change-password/', ChangePasswordView.as_view()),
 ]
