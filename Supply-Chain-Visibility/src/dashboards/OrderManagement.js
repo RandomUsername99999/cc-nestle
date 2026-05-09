@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "../api";
 import { 
     BiPlus, BiPencil, BiTrash, BiCube, 
@@ -48,11 +48,7 @@ const OrderManagement = () => {
 
     const [expandedQR, setExpandedQR] = useState(null);
 
-    useEffect(() => {
-        fetchOrders();
-    }, []);
-
-    const fetchOrders = async (params = {}) => {
+    const fetchOrders = useCallback(async (params = {}) => {
         setLoading(true);
         try {
             const hasQueryParams = params.q || params.status || params.requires_refrigeration;
@@ -64,7 +60,11 @@ const OrderManagement = () => {
             toast.error("Failed to sync order inventory.");
         }
         setLoading(false);
-    };
+    }, []);
+
+    useEffect(() => {
+        fetchOrders();
+    }, [fetchOrders]);
 
     const handleSaveOrder = async (e) => {
         e.preventDefault();

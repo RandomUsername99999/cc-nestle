@@ -297,7 +297,7 @@ export default function ManagerDashboard() {
                                 <tbody className="divide-y divide-slate-50">
                                     {allActivities
                                         .filter(a => filterType === 'all' || a.type === filterType)
-                                        .filter(a => !search || a.displayId.toLowerCase().includes(search.toLowerCase()))
+                                        .filter(a => !search || String(a.displayId || '').toLowerCase().includes(String(search || '').toLowerCase()))
                                         .filter(a => {
                                             if (filterType === 'all') return true;
                                             if (orderFilter === 'assigned') return ['pending', 'assigned', 'planned', 'dispatched'].includes(a.status);
@@ -334,7 +334,7 @@ export default function ManagerDashboard() {
                                             </td>
                                         </tr>
                                     ))}
-                                    {allActivities.filter(a => filterType === 'all' || a.type === filterType).filter(a => !search || a.displayId.toLowerCase().includes(search.toLowerCase())).filter(a => {
+                                    {allActivities.filter(a => filterType === 'all' || a.type === filterType).filter(a => !search || String(a.displayId || '').toLowerCase().includes(String(search || '').toLowerCase())).filter(a => {
                                             if (filterType === 'all') return true;
                                             if (orderFilter === 'assigned') return ['pending', 'assigned', 'planned', 'dispatched'].includes(a.status);
                                             if (orderFilter === 'in_transit') return ['in_transit'].includes(a.status);
