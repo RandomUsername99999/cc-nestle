@@ -75,10 +75,10 @@ const ShipmentManifest = () => {
 
     const filteredShipments = shipments.filter(s => 
         s.shipment_id.toString().includes(searchTerm) || 
-        s.vehicle_plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.driver_name.toLowerCase().includes(searchTerm.toLowerCase())
+        (s.vehicle_plate && s.vehicle_plate.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (s.driver_name && s.driver_name.toLowerCase().includes(searchTerm.toLowerCase()))
     ).filter(s => {
-        if (orderFilter === 'assigned') return ['planned', 'dispatched'].includes(s.status);
+        if (orderFilter === 'assigned') return ['planned', 'assigned', 'dispatched', 'accepted', 'in_progress'].includes(s.status);
         if (orderFilter === 'in_transit') return ['in_transit'].includes(s.status);
         if (orderFilter === 'delivered') return ['completed'].includes(s.status);
         return true;
