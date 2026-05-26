@@ -41,8 +41,7 @@ export default function ComplianceMaintenanceModule() {
     const triggerNotification = async (type, id, name) => {
         try {
             toast.loading("Dispatching notification...");
-            // Simulate API call to notification endpoint
-            await new Promise(r => setTimeout(r, 800));
+            await api.post('trigger-reminder/', { type, id });
             toast.dismiss();
             toast.success(`Renewal reminder sent to ${name}`);
         } catch (err) {
@@ -100,7 +99,7 @@ export default function ComplianceMaintenanceModule() {
                                             <p className="text-xs text-slate-500">{v.manufacturer} {v.model}</p>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4 text-xs font-bold">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-bold">
                                         <div className="flex flex-col gap-1">
                                             <span className="text-slate-400 uppercase tracking-widest text-[9px]">Registration</span>
                                             <span className={`px-2 py-1 rounded w-max ${regStatus.color}`}>{v.registration_expiry || 'N/A'} - {regStatus.label}</span>
@@ -108,6 +107,10 @@ export default function ComplianceMaintenanceModule() {
                                         <div className="flex flex-col gap-1">
                                             <span className="text-slate-400 uppercase tracking-widest text-[9px]">Insurance</span>
                                             <span className={`px-2 py-1 rounded w-max ${insStatus.color}`}>{v.insurance_expiry || 'N/A'} - {insStatus.label}</span>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-slate-400 uppercase tracking-widest text-[9px]">Maintenance</span>
+                                            <span className={`px-2 py-1 rounded w-max ${getExpiryStatus(v.next_service_date).color}`}>{v.next_service_date || 'N/A'} - {getExpiryStatus(v.next_service_date).label}</span>
                                         </div>
                                     </div>
                                     <div className="mt-4 pt-4 border-t border-slate-50 flex justify-end">

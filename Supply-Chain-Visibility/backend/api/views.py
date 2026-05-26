@@ -1664,6 +1664,42 @@ class OrderExceptionViewSet(viewsets.ModelViewSet):
     serializer_class = OrderExceptionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def trigger_reminder(request):
+    req_type = request.data.get('type')
+    req_id = request.data.get('id')
+    
+    if not req_type or not req_id:
+        return Response({"error": "Missing type or id"}, status=400)
+        
+    try:
+        if req_type == 'vehicle':
+            vehicle = Vehicle.objects.get(pk=req_id)
+            AuditLog.objects.create(
+                user=request.user,
+                action='MANUAL_REMINDER_SENT',
+                resource_type='Vehicle',
+                resource_id=req_id,
+                details=f"Manual push notification dispatched for vehicle {vehicle.plate_number} renewals/maintenance."
+            )
+            return Response({"success": True, "message": "Vehicle reminder sent"})
+        elif req_type == 'driver':
+            from drivers.models import Driver
+            driver = Driver.objects.get(pk=req_id)
+            AuditLog.objects.create(
+                user=request.user,
+                action='MANUAL_REMINDER_SENT',
+                resource_type='Driver',
+                resource_id=req_id,
+                details=f"Manual push notification dispatched for driver {driver.employee.full_name if driver.employee else 'Unknown'} license renewal."
+            )
+            return Response({"success": True, "message": "Driver reminder sent"})
+        else:
+            return Response({"error": "Invalid type"}, status=400)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
 class ReportViewSet(viewsets.ViewSet):
     permission_classes = [IsInternalRole]
 

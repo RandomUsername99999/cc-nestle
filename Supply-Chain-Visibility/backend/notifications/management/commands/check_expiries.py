@@ -46,4 +46,15 @@ class Command(BaseCommand):
                 details=f"Push notification dispatched: Insurance for vehicle {vehicle.plate_number} expires in 30 days."
             )
             
+        # Check Vehicle Maintenance
+        vehicles_maint = Vehicle.objects.filter(next_service_date=target_date)
+        for vehicle in vehicles_maint:
+            self.stdout.write(self.style.WARNING(f"Vehicle {vehicle.vehicle_id} requires maintenance in 30 days ({target_date})."))
+            AuditLog.objects.create(
+                action='EXPIRY_NOTIFICATION_SENT',
+                resource_type='Vehicle',
+                resource_id=vehicle.vehicle_id,
+                details=f"Push notification dispatched: Maintenance for vehicle {vehicle.plate_number} is scheduled in 30 days."
+            )
+            
         self.stdout.write(self.style.SUCCESS('Successfully checked expiries.'))
