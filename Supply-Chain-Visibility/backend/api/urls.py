@@ -11,7 +11,7 @@ from .views import (
     dispatch_recommendations, ShipmentViewSet,
     DeliverySearchView, LiveVehicleView, OrderAuditView, ChangePasswordView,
     ProofOfDeliveryViewSet, ReportViewSet, OrderExceptionViewSet, UniversalSearchView,
-    trigger_reminder
+    trigger_reminder, driver_notifications
 )
 from .serializers import UserSerializer, VehicleSerializer, VehicleAssignmentSerializer
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -48,4 +48,5 @@ urlpatterns = [
     path('search/', UniversalSearchView.as_view()),
     path('change-password/', ChangePasswordView.as_view()),
     path('trigger-reminder/', trigger_reminder),
+    path('driver-notifications/', driver_notifications),
 ]

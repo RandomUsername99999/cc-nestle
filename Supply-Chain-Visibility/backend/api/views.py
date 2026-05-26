@@ -1700,6 +1700,55 @@ def trigger_reminder(request):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def driver_notifications(request):
+    try:
+        user_id = request.GET.get('user_id')
+        if not user_id:
+            return Response({"error": "user_id is required"}, status=400)
+            
+        from drivers.models import Driver
+        from api.models import VehicleAssignment
+        from django.db.models import Q
+        
+        # Get the driver profile for this user
+        driver = Driver.objects.filter(employee__user_id=user_id).first()
+        if not driver:
+            return Response([])
+            
+        # Get currently assigned vehicle
+        assignment = VehicleAssignment.objects.filter(driver=driver, status='active').first()
+        vehicle_id = assignment.vehicle.vehicle_id if assignment and assignment.vehicle else None
+        
+        # Query AuditLogs
+        query = Q(action__in=['MANUAL_REMINDER_SENT', 'EXPIRY_NOTIFICATION_SENT'])
+        
+        driver_q = Q(resource_type='Driver', resource_id=driver.id)
+        if vehicle_id:
+            vehicle_q = Q(resource_type='Vehicle', resource_id=vehicle_id)
+            query = query & (driver_q | vehicle_q)
+        else:
+            query = query & driver_q
+            
+        logs = AuditLog.objects.filter(query).order_by('-timestamp')[:20]
+        
+        data = []
+        for log in logs:
+            data.append({
+                'id': log.id,
+                'action': log.action,
+                'details': log.details,
+                'timestamp': log.timestamp.isoformat(),
+                'resource_type': log.resource_type
+            })
+            
+        return Response(data)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=500)
+
 class ReportViewSet(viewsets.ViewSet):
     permission_classes = [IsInternalRole]
 

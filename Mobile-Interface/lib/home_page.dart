@@ -25,6 +25,8 @@ class _HomePageState extends State<HomePage> {
   bool _isLoadingTask = false;
   String? _accessToken;
   String? _username;
+  List<dynamic> _notifications = [];
+  bool _hasUnread = false;
   
   final String _baseApiUrl = "https://UnderpaidWorker.pythonanywhere.com/api/";
 
@@ -47,6 +49,7 @@ class _HomePageState extends State<HomePage> {
       _username = prefs.getString('username') ?? 'User';
     });
     _fetchActiveTask();
+    _fetchNotifications();
   }
 
   void _showVehicleInfo() {
@@ -120,6 +123,91 @@ class _HomePageState extends State<HomePage> {
     } finally {
       setState(() => _isLoadingTask = false);
     }
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      final response = await http.get(
+        Uri.parse("${_baseApiUrl}driver-notifications/?user_id=${widget.userId}"),
+        headers: _authHeaders,
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> notifs = jsonDecode(response.body);
+        setState(() {
+          _notifications = notifs;
+          _hasUnread = notifs.isNotEmpty; // Simple unread logic
+        });
+      }
+    } catch (e) {
+      debugPrint("Failed to load notifications: $e");
+    }
+  }
+
+  void _showNotificationInbox() {
+    setState(() => _hasUnread = false);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        padding: const EdgeInsets.all(32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("NOTIFICATION INBOX", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFFBCAAA4), letterSpacing: 2)),
+                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (_notifications.isEmpty)
+               const Expanded(child: Center(child: Text("No new notifications.", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4)))))
+            else
+               Expanded(
+                 child: ListView.builder(
+                   itemCount: _notifications.length,
+                   itemBuilder: (ctx, i) {
+                     final notif = _notifications[i];
+                     return Container(
+                       margin: const EdgeInsets.only(bottom: 12),
+                       padding: const EdgeInsets.all(16),
+                       decoration: BoxDecoration(
+                         color: const Color(0xFFFCFBF9),
+                         border: Border.all(color: const Color(0xFFEFEBE9)),
+                         borderRadius: BorderRadius.circular(16),
+                       ),
+                       child: Row(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                           const Icon(Icons.notifications_active, color: Color(0xFF3E2723), size: 20),
+                           const SizedBox(width: 16),
+                           Expanded(
+                             child: Column(
+                               crossAxisAlignment: CrossAxisAlignment.start,
+                               children: [
+                                 Text(notif['details'] ?? "Notification", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
+                                 const SizedBox(height: 4),
+                                 Text(notif['action'] ?? "", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFBCAAA4))),
+                               ],
+                             ),
+                           )
+                         ],
+                       )
+                     );
+                   },
+                 ),
+               )
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _checkPermissions() async {
@@ -339,9 +427,31 @@ class _HomePageState extends State<HomePage> {
                             ],
                           ),
                         ),
-                        IconButton(
-                          onPressed: _logout,
-                          icon: const Icon(Icons.logout, color: Color(0xFF3E2723)),
+                        Row(
+                          children: [
+                            Stack(
+                              children: [
+                                IconButton(
+                                  onPressed: _showNotificationInbox,
+                                  icon: const Icon(Icons.notifications_none, color: Color(0xFF3E2723)),
+                                ),
+                                if (_hasUnread)
+                                  Positioned(
+                                    right: 10,
+                                    top: 10,
+                                    child: Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                    ),
+                                  )
+                              ],
+                            ),
+                            IconButton(
+                              onPressed: _logout,
+                              icon: const Icon(Icons.logout, color: Color(0xFF3E2723)),
+                            )
+                          ],
                         )
                       ],
                     ),
