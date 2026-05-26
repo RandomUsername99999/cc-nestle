@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import DeliveryAnalytics from "./DeliveryAnalytics";
+import ComplianceMaintenanceModule from "./ComplianceMaintenanceModule";
 
 const STATUS_CONFIG = {
     pending:    { bg: 'bg-amber-50',   text: 'text-amber-700',  border: 'border-amber-100',  dot: 'bg-amber-400',   label: 'Pending' },
@@ -68,7 +69,6 @@ export default function ManagerDashboard() {
     const [orders, setOrders] = useState([]);
     const [shipments, setShipments] = useState([]);
     const [pods, setPods] = useState([]);
-    const [tripLogs, setTripLogs] = useState([]);
     const [exceptions, setExceptions] = useState([]);
     const [transfers, setTransfers] = useState([]);
     const [activeInbound, setActiveInbound] = useState([]);
@@ -117,7 +117,6 @@ export default function ManagerDashboard() {
                 fetchEndpoint('orders/', setOrders),
                 fetchEndpoint('shipments/', setShipments),
                 fetchEndpoint('pods/', setPods),
-                fetchEndpoint('drivers/trip-logs/', setTripLogs),
                 fetchEndpoint('exceptions/', setExceptions),
                 fetchEndpoint('warehouses/transfers/', setTransfers)
             ]);
@@ -428,8 +427,8 @@ export default function ManagerDashboard() {
                     { id: 'shipments', label: 'Shipment Outbound', icon: Truck },
                     { id: 'analytics', label: 'Delivery Intelligence', icon: BarChart3 },
                     { id: 'documents', label: 'Consolidated Report', icon: FileText },
-                    { id: 'trips', label: 'Driver Logs', icon: Navigation },
                     { id: 'inventory', label: 'Stock Transfers', icon: ArrowRightLeft },
+                    { id: 'maintenance', label: 'Fleet Maintenance', icon: ShieldAlert },
                     { id: 'inbound', label: 'Inbound Radar', icon: MapPin },
                 ].map(({ id, label, icon: Icon }) => (
                     <button
@@ -507,55 +506,7 @@ export default function ManagerDashboard() {
                 </div>
             )}
 
-            {activeView === 'trips' && (
-                <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden animate-fade-in">
-                    <div className="p-10 border-b border-slate-50 flex items-center justify-between">
-                        <div>
-                            <h2 className="text-2xl font-black text-slate-950 tracking-tighter">Driver Trip Logs</h2>
-                            <p className="text-xs font-medium text-slate-400 mt-1 uppercase tracking-widest">Fleet usage, mileage & fuel metrics</p>
-                        </div>
-                        <button onClick={() => handleDownloadReport('driver_trip_logs', 'Trip Logs', 'Driver Trip Logs')} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all">
-                            <Download size={16} /> Download Full Log
-                        </button>
-                    </div>
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                            <tr>
-                                <th className="px-10 py-6">Driver Info</th>
-                                <th className="px-10 py-6">Vehicle</th>
-                                <th className="px-10 py-6">Time Window</th>
-                                <th className="px-10 py-6">Mileage (Start/End)</th>
-                                <th className="px-10 py-6 text-right">Fuel</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {tripLogs.map(log => (
-                                <tr key={log.log_id} className="hover:bg-slate-50/50 transition-all">
-                                    <td className="px-10 py-7">
-                                        <p className="font-black text-slate-900 text-sm">{log.driver_name || `Driver #${log.driver}`}</p>
-                                    </td>
-                                    <td className="px-10 py-7 font-mono text-[11px] font-black text-slate-500">{log.vehicle_plate || `V-${log.vehicle}`}</td>
-                                    <td className="px-10 py-7 text-xs font-bold text-slate-600">
-                                        {new Date(log.start_time).toLocaleString()} <br/>
-                                        <span className="text-slate-300 font-medium">{log.end_time ? new Date(log.end_time).toLocaleString() : 'In Progress'}</span>
-                                    </td>
-                                    <td className="px-10 py-7 font-black text-slate-800 text-sm">
-                                        {log.start_mileage} km → {log.end_mileage || '...'} km
-                                    </td>
-                                    <td className="px-10 py-7 text-right">
-                                        <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black">{log.fuel_consumed || 0}L</span>
-                                    </td>
-                                </tr>
-                            ))}
-                            {tripLogs.length === 0 && (
-                                <tr>
-                                    <td colSpan="5" className="px-10 py-20 text-center text-slate-300 font-black uppercase text-[10px] tracking-widest">No trip logs recorded in this period</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+            {activeView === 'maintenance' && <ComplianceMaintenanceModule />}
 
             {activeView === 'inventory' && (
                 <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden animate-fade-in">

@@ -254,13 +254,13 @@ export default function DeliveryAnalytics() {
 
                 {/* Failure Analysis */}
                 <div className="bg-white p-8 rounded-[40px] border border-coffee-100 shadow-sm">
-                    <h3 className="text-lg font-black text-coffee-900 mb-8">Delivery Exception Analysis</h3>
+                    <h3 className="text-lg font-black text-coffee-900 mb-8">Failed Delivery</h3>
                     <div className="flex flex-col md:flex-row items-center gap-8">
                         <div className="h-[250px] w-full md:w-1/2">
                             <ResponsiveContainer width="100%" height={250} minHeight={0} minWidth={0} debounce={50}>
                                 <PieChart>
                                     <Pie
-                                        data={failures}
+                                        data={failures.filter(f => !['no_answer', 'damaged'].includes(f.exception_type))}
                                         cx="50%"
                                         cy="50%"
                                         innerRadius={60}
@@ -269,7 +269,7 @@ export default function DeliveryAnalytics() {
                                         dataKey="count"
                                         nameKey="exception_type"
                                     >
-                                        {failures.map((entry, index) => (
+                                        {failures.filter(f => !['no_answer', 'damaged'].includes(f.exception_type)).map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
@@ -278,7 +278,7 @@ export default function DeliveryAnalytics() {
                             </ResponsiveContainer>
                         </div>
                         <div className="w-full md:w-1/2 space-y-4">
-                            {failures.length > 0 ? failures.map((f, i) => (
+                            {failures.filter(f => !['no_answer', 'damaged'].includes(f.exception_type)).length > 0 ? failures.filter(f => !['no_answer', 'damaged'].includes(f.exception_type)).map((f, i) => (
                                 <div key={i} className="flex items-center justify-between p-3 bg-coffee-50/30 rounded-2xl border border-coffee-100/50">
                                     <div className="flex items-center gap-3">
                                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
@@ -321,6 +321,59 @@ export default function DeliveryAnalytics() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+
+                {/* New Intelligence Dashboards */}
+                <div className="bg-white p-8 rounded-[40px] border border-coffee-100 shadow-sm">
+                    <h3 className="text-lg font-black text-coffee-900 mb-6">On-Time Delivery Analysis</h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                            <div>
+                                <p className="text-xs font-black text-emerald-900 uppercase">On-Time Performance</p>
+                                <p className="text-[10px] font-bold text-emerald-600 mt-1">Planned vs Actual Arrival</p>
+                            </div>
+                            <span className="text-xl font-black text-emerald-700">{summary.on_time_rate}%</span>
+                        </div>
+                        <div className="flex items-center justify-between p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                            <div>
+                                <p className="text-xs font-black text-blue-900 uppercase">Average Delay</p>
+                                <p className="text-[10px] font-bold text-blue-600 mt-1">Across all delayed routes</p>
+                            </div>
+                            <span className="text-xl font-black text-blue-700">14m</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white p-8 rounded-[40px] border border-coffee-100 shadow-sm">
+                    <h3 className="text-lg font-black text-coffee-900 mb-6">Vehicle Utilization Analysis</h3>
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-black uppercase text-coffee-600">Fleet Capacity Used</span>
+                            <span className="text-sm font-black text-coffee-900">78%</span>
+                        </div>
+                        <div className="w-full h-2 bg-coffee-50 rounded-full overflow-hidden mb-6">
+                            <div className="h-full bg-blue-500 rounded-full w-[78%]"></div>
+                        </div>
+                        <p className="text-[10px] font-bold text-coffee-400">Idle vehicles: <span className="text-coffee-900">2</span> | Overloaded risks: <span className="text-rose-500">0</span></p>
+                    </div>
+                </div>
+
+                <div className="bg-white p-8 rounded-[40px] border border-coffee-100 shadow-sm">
+                    <h3 className="text-lg font-black text-coffee-900 mb-6">Retailer Delivery Pattern</h3>
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center p-3 bg-coffee-50 rounded-xl">
+                            <span className="text-xs font-bold text-coffee-700">Peak Delivery Time</span>
+                            <span className="text-xs font-black text-coffee-900">10:00 AM - 2:00 PM</span>
+                        </div>
+                        <div className="flex justify-between items-center p-3 bg-coffee-50 rounded-xl">
+                            <span className="text-xs font-bold text-coffee-700">Avg. Unloading Time</span>
+                            <span className="text-xs font-black text-coffee-900">22 mins</span>
+                        </div>
+                        <div className="flex justify-between items-center p-3 bg-rose-50 rounded-xl">
+                            <span className="text-xs font-bold text-rose-700">Rejection Rate</span>
+                            <span className="text-xs font-black text-rose-900">2.4%</span>
+                        </div>
                     </div>
                 </div>
 

@@ -600,19 +600,28 @@ class OrderViewSet(viewsets.ModelViewSet):
             notes=notes
         )
         
-        # Convert it to a return task
+        # Convert it to a return task for Dispatcher workflow
         old_status = order.status
-        order.status = 'in_transit'
-        order.delivery_address = f"[RETURN TO WAREHOUSE] {order.pickup_address}"
+        order.status = 'pending'
+        order.assigned_driver = None
+        order.assigned_vehicle = None
+        
+        # Reason-Based Routing categorization
+        order.delivery_address = f"[RETURN - {exception_type.upper()}] {order.pickup_address}"
         if order.pickup_lat and order.pickup_lng:
             order.delivery_lat = order.pickup_lat
             order.delivery_lng = order.pickup_lng
+            
+        # Detach from current shipment so dispatcher can re-route
+        from .models import ShipmentOrder
+        ShipmentOrder.objects.filter(order=order).delete()
+        
         order.save()
         
         OrderStatusLog.objects.create(
             order=order,
             from_status=old_status,
-            to_status='delivery_failed_returning',
+            to_status='pending_return',
             changed_by=request.user,
             source='driver_exception'
         )
