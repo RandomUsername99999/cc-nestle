@@ -290,7 +290,8 @@ function LoginCard({ sendDataToParent, setUser }) {
                   if(error) setError("");
               }}
               className={`block w-full pl-10 pr-11 py-[0.8rem] bg-white border ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : 'border-[#EAE3D9] hover:border-[#D7CCC8] focus:border-[#8D6E63] focus:ring-[#8D6E63]/20'} rounded-[10px] text-sm text-[#333333] placeholder-[#BCAAA4] transition-all outline-none focus:ring-4`}
-              placeholder="••••••••"
+              placeholder="•••••••••"
+              autoComplete="current-password"
             />
             <button
               type="button"

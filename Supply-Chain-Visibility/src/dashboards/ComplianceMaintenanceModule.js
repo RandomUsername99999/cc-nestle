@@ -16,12 +16,21 @@ export default function ComplianceMaintenanceModule() {
         setLoading(true);
         try {
             // Note: In a real app we'd fetch from specific endpoints for compliances
-            const [vehRes, drvRes] = await Promise.all([
+            const [vehRes, userRes] = await Promise.all([
                 api.get('vehicles/'),
-                api.get('drivers/')
+                api.get('users/')
             ]);
             setVehicles(vehRes.data);
-            setDrivers(drvRes.data);
+            
+            const driverData = userRes.data
+                .filter(u => u.role === 'driver')
+                .map(u => ({
+                    driver_id: u.id,
+                    employee: u.employee,
+                    license_number: u.driver_profile?.license_number || 'N/A',
+                    license_expiry_date: u.driver_profile?.license_expiry_date
+                }));
+            setDrivers(driverData);
         } catch (err) {
             toast.error("Failed to load compliance data");
         } finally {

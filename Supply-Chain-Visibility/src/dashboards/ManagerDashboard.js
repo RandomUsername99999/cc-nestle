@@ -420,7 +420,7 @@ export default function ManagerDashboard() {
             </div>
 
             {/* View Switcher */}
-            <div className="flex flex-wrap items-center gap-2 mb-10 bg-slate-100/50 p-1.5 rounded-3xl w-max border border-slate-100">
+            <div className="flex overflow-x-auto flex-nowrap items-center gap-2 mb-10 bg-slate-100/50 p-1.5 rounded-3xl border border-slate-100 no-scrollbar">
                 {[
                     { id: 'overview', label: 'Dashboard', icon: Activity },
                     { id: 'orders', label: 'Order Management', icon: Package },
@@ -434,7 +434,7 @@ export default function ManagerDashboard() {
                     <button
                         key={id}
                         onClick={() => setActiveView(id)}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${activeView === id ? 'bg-white text-slate-950 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${activeView === id ? 'bg-white text-slate-950 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                         <Icon size={16} /> {label}
                     </button>
