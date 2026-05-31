@@ -415,18 +415,22 @@ function EditVehiclePopup({ vehicle, onSuccess, onClose }) {
         e.preventDefault();
         setLoading(true);
         try {
-            await api.patch(`vehicles/${vehicle.id}/`, {
-                plate_number: plateNumber.toUpperCase(),
-                vehicle_type: vehicleType,
-                make_model: makeModel,
-                manufacturer: manufacturer,
-                year: parseInt(year),
-                capacity: parseFloat(capacity),
-                volume: volume ? parseFloat(volume) : null,
-                registration_expiry: registrationExpiry,
-                insurance_expiry: insuranceExpiry,
-                is_refrigerated: isRefrigerated
-            });
+            const payload = {};
+            if (plateNumber.toUpperCase() !== vehicle.plate_number) payload.plate_number = plateNumber.toUpperCase();
+            if (vehicleType !== vehicle.vehicle_type) payload.vehicle_type = vehicleType;
+            if (makeModel !== vehicle.make_model) payload.make_model = makeModel;
+            if (manufacturer !== vehicle.manufacturer) payload.manufacturer = manufacturer;
+            if (parseInt(year) !== vehicle.year) payload.year = parseInt(year);
+            if (parseFloat(capacity) !== vehicle.capacity) payload.capacity = parseFloat(capacity);
+            
+            const parsedVol = volume ? parseFloat(volume) : null;
+            if (parsedVol !== vehicle.volume) payload.volume = parsedVol;
+            
+            if (registrationExpiry !== vehicle.registration_expiry) payload.registration_expiry = registrationExpiry;
+            if (insuranceExpiry !== vehicle.insurance_expiry) payload.insurance_expiry = insuranceExpiry;
+            if (isRefrigerated !== vehicle.is_refrigerated) payload.is_refrigerated = isRefrigerated;
+
+            await api.patch(`vehicles/${vehicle.id}/`, payload);
             onSuccess();
         } catch (error) {
             toast.error("Update failed");

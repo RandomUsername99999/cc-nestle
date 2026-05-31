@@ -14,7 +14,7 @@ api.interceptors.request.use(
         // Identity Fallback for session-less/debugging scenarios
         const userId = localStorage.getItem('user_id');
         if (userId) {
-            if (config.method === 'get') {
+            if (['get', 'delete'].includes(config.method)) {
                 config.params = { ...config.params, user_id: userId };
             } else if (['post', 'put', 'patch'].includes(config.method)) {
                 // Ensure data is an object
