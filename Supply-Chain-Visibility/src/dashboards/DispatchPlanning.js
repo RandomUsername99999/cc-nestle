@@ -590,7 +590,7 @@ export default function DispatchPlanning() {
                     }
 
                     return true;
-                  }).map(o => {
+                  }).sort((a, b) => (b.is_priority ? 1 : 0) - (a.is_priority ? 1 : 0)).map(o => {
                     const isSelected = selectedOrders.includes(o.order_id);
                     return (
                       <tr
@@ -599,7 +599,14 @@ export default function DispatchPlanning() {
                         className={`group transition-all cursor-pointer ${isSelected ? 'bg-coffee-50/30' : 'hover:bg-coffee-50/10'}`}
                       >
                         <td className="py-6"><input type="checkbox" checked={isSelected} readOnly className="rounded-md border-coffee-200 text-coffee-950 focus:ring-coffee-0" /></td>
-                        <td className="py-6 font-mono font-black text-coffee-950 text-xs tracking-tighter">#{o.order_id}</td>
+                        <td className="py-6 font-mono font-black text-coffee-950 text-xs tracking-tighter">
+                          <div className="flex items-center gap-2">
+                            #{o.order_id}
+                            {o.is_priority && (
+                              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" title="Priority Order"></span>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-6">
                             <p className="text-[10px] font-black text-coffee-900 leading-tight">{o.delivery_address?.split(',')[0]}, {o.delivery_address?.split(',')[1]}</p>
                             {o.requires_refrigeration && (

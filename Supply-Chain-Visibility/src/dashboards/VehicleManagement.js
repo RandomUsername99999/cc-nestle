@@ -284,6 +284,7 @@ function AddVehiclePopup({ onSuccess, onClose }) {
     const [volume, setVolume] = useState("");
     const [registrationExpiry, setRegistrationExpiry] = useState("");
     const [insuranceExpiry, setInsuranceExpiry] = useState("");
+    const [nextServiceDate, setNextServiceDate] = useState("");
     const [isRefrigerated, setIsRefrigerated] = useState(false);
     const [loading, setLoading] = useState(false);
 
@@ -303,6 +304,7 @@ function AddVehiclePopup({ onSuccess, onClose }) {
                 volume: volume ? parseFloat(volume) : null,
                 registration_expiry: registrationExpiry || null,
                 insurance_expiry: insuranceExpiry || null,
+                next_service_date: nextServiceDate || null,
                 is_refrigerated: isRefrigerated
             };
 
@@ -380,9 +382,10 @@ function AddVehiclePopup({ onSuccess, onClose }) {
                     {/* Compliance */}
                     <div className="space-y-4">
                         <h3 className="text-sm font-bold text-slate-900 border-l-4 border-amber-500 pl-3">Compliance & Insurance</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                             <VehicleInputField label="Registration Expiry" type="date" value={registrationExpiry} onChange={e => setRegistrationExpiry(e.target.value)} required icon={<BiCalendar/>} />
                             <VehicleInputField label="Insurance Expiry" type="date" value={insuranceExpiry} onChange={e => setInsuranceExpiry(e.target.value)} required icon={<BiCalendar/>} />
+                            <VehicleInputField label="Next Service Date" type="date" value={nextServiceDate} onChange={e => setNextServiceDate(e.target.value)} required icon={<BiCalendar/>} />
                         </div>
                     </div>
                 </form>
@@ -408,6 +411,7 @@ function EditVehiclePopup({ vehicle, onSuccess, onClose }) {
     const [volume, setVolume] = useState(vehicle.volume || "");
     const [registrationExpiry, setRegistrationExpiry] = useState(vehicle.registration_expiry || "");
     const [insuranceExpiry, setInsuranceExpiry] = useState(vehicle.insurance_expiry || "");
+    const [nextServiceDate, setNextServiceDate] = useState(vehicle.next_service_date || "");
     const [isRefrigerated, setIsRefrigerated] = useState(vehicle.is_refrigerated || false);
     const [loading, setLoading] = useState(false);
 
@@ -434,6 +438,9 @@ function EditVehiclePopup({ vehicle, onSuccess, onClose }) {
             
             const insExp = insuranceExpiry || null;
             if (insExp !== vehicle.insurance_expiry) payload.insurance_expiry = insExp;
+            
+            const nextSvc = nextServiceDate || null;
+            if (nextSvc !== vehicle.next_service_date) payload.next_service_date = nextSvc;
             
             if (isRefrigerated !== vehicle.is_refrigerated) payload.is_refrigerated = isRefrigerated;
 
@@ -470,6 +477,7 @@ function EditVehiclePopup({ vehicle, onSuccess, onClose }) {
                         <VehicleInputField label="Capacity (KG)" type="number" value={capacity} onChange={e => setCapacity(e.target.value)} required />
                         <VehicleInputField label="Registration Expiry" type="date" value={registrationExpiry} onChange={e => setRegistrationExpiry(e.target.value)} required icon={<BiCalendar/>} />
                         <VehicleInputField label="Insurance Expiry" type="date" value={insuranceExpiry} onChange={e => setInsuranceExpiry(e.target.value)} required icon={<BiCalendar/>} />
+                        <VehicleInputField label="Next Service Date" type="date" value={nextServiceDate} onChange={e => setNextServiceDate(e.target.value)} required icon={<BiCalendar/>} />
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                         <button type="button" onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-all">Cancel</button>

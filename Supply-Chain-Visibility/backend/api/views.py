@@ -1749,7 +1749,7 @@ def trigger_reminder(request):
             return Response({"success": True, "message": "Vehicle reminder sent"})
         elif req_type == 'driver':
             from drivers.models import Driver
-            driver = Driver.objects.get(pk=req_id)
+            driver = Driver.objects.get(employee__user__user_id=req_id)
             AuditLog.objects.create(
                 user=request.user,
                 action='MANUAL_REMINDER_SENT',
