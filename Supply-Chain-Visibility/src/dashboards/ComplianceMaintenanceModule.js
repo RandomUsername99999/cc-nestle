@@ -87,19 +87,21 @@ export default function ComplianceMaintenanceModule() {
                         <Truck size={18} /> Vehicle Asset Compliance
                     </h3>
                     <div className="space-y-4">
-                        {vehicles.map(v => {
+                        {vehicles.filter(v => v.assignedDriver).map(v => {
                             const regStatus = getExpiryStatus(v.registration_expiry);
                             const insStatus = getExpiryStatus(v.insurance_expiry);
+                            const assignedDriverObj = drivers.find(d => d.driver_id === v.assignedDriver);
+                            const licStatus = assignedDriverObj ? getExpiryStatus(assignedDriverObj.license_expiry_date) : null;
                             
                             return (
                                 <div key={v.vehicle_id} className="p-5 border border-slate-100 rounded-2xl hover:shadow-md transition-all group">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
                                             <p className="font-black text-slate-900 text-lg">{v.plate_number}</p>
-                                            <p className="text-xs text-slate-500">{v.manufacturer} {v.model}</p>
+                                            <p className="text-xs text-slate-500">{v.manufacturer} {v.model} • Driver: {assignedDriverObj ? assignedDriverObj.employee?.full_name || 'Assigned' : 'Unknown'}</p>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-bold">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-bold">
                                         <div className="flex flex-col gap-1">
                                             <span className="text-slate-400 uppercase tracking-widest text-[9px]">Registration</span>
                                             <span className={`px-2 py-1 rounded w-max ${regStatus.color}`}>{v.registration_expiry || 'N/A'} - {regStatus.label}</span>
@@ -112,8 +114,22 @@ export default function ComplianceMaintenanceModule() {
                                             <span className="text-slate-400 uppercase tracking-widest text-[9px]">Maintenance</span>
                                             <span className={`px-2 py-1 rounded w-max ${getExpiryStatus(v.next_service_date).color}`}>{v.next_service_date || 'N/A'} - {getExpiryStatus(v.next_service_date).label}</span>
                                         </div>
+                                        {assignedDriverObj && (
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-slate-400 uppercase tracking-widest text-[9px]">Driver License</span>
+                                                <span className={`px-2 py-1 rounded w-max ${licStatus.color}`}>{assignedDriverObj.license_expiry_date || 'N/A'} - {licStatus.label}</span>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="mt-4 pt-4 border-t border-slate-50 flex justify-end">
+                                    <div className="mt-4 pt-4 border-t border-slate-50 flex justify-end gap-2">
+                                        {assignedDriverObj && (
+                                            <button 
+                                                onClick={() => triggerNotification('driver', assignedDriverObj.driver_id, assignedDriverObj.employee?.full_name || 'Driver')}
+                                                className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                                            >
+                                                <Bell size={14} /> Notify Driver
+                                            </button>
+                                        )}
                                         <button 
                                             onClick={() => triggerNotification('vehicle', v.vehicle_id, v.plate_number)}
                                             className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
@@ -124,7 +140,7 @@ export default function ComplianceMaintenanceModule() {
                                 </div>
                             );
                         })}
-                        {vehicles.length === 0 && <p className="text-sm text-slate-400">No vehicles found.</p>}
+                        {vehicles.filter(v => v.assignedDriver).length === 0 && <p className="text-sm text-slate-400">No assigned vehicles found.</p>}
                     </div>
                 </div>
 

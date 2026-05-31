@@ -158,6 +158,7 @@ class Order(models.Model):
     assigned_driver = models.ForeignKey('drivers.Driver', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tasks')
 
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
+    is_priority = models.BooleanField(default=False)
     
     # Delivery Confirmation
     delivered_at = models.DateTimeField(null=True, blank=True)

@@ -237,7 +237,7 @@ export default function DeliveryAnalytics() {
                         </div>
                     </div>
                     <div className="flex-1 min-h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minHeight={1}>
                             <AreaChart data={MOCK_PREDICTIVE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="colorExpected" x1="0" y1="0" x2="0" y2="1">
@@ -298,7 +298,7 @@ export default function DeliveryAnalytics() {
                     <p className="text-xs text-slate-500 font-medium mb-6">Operational cost breakdown (Week).</p>
                     
                     <div className="h-[200px] mb-4 relative">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minHeight={1}>
                             <PieChart>
                                 <Pie data={MOCK_FINANCIALS.cost_breakdown} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value">
                                     {MOCK_FINANCIALS.cost_breakdown.map((entry, index) => (
@@ -445,7 +445,7 @@ function ExecutiveMetricCard({ title, value, trend, trendLabel, icon: Icon, colo
             </div>
             
             <div className="h-8 w-full opacity-60 group-hover:opacity-100 transition-opacity">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minHeight={1}>
                     <LineChart data={sparklineData}>
                         <Line type="monotone" dataKey="val" stroke={theme.stroke} strokeWidth={2} dot={false} isAnimationActive={false} />
                     </LineChart>

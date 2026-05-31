@@ -602,7 +602,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         
         # Convert it to a return task for Dispatcher workflow
         old_status = order.status
-        order.status = 'pending'
+        order.status = 'delivery_failed'
         order.assigned_driver = None
         order.assigned_vehicle = None
         
@@ -627,6 +627,69 @@ class OrderViewSet(viewsets.ModelViewSet):
         )
         
         return Response({'success': True, 'message': 'Exception reported. Please return the item to the warehouse.'})
+
+    @action(detail=True, methods=['post'])
+    def reassign_to_shipment(self, request, pk=None):
+        order = self.get_object()
+        shipment_id = request.data.get('shipment_id')
+        
+        from .models import Shipment, ShipmentOrder, OrderStatusLog
+        try:
+            shipment = Shipment.objects.get(shipment_id=shipment_id)
+        except Shipment.DoesNotExist:
+            return Response({'error': 'Shipment not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        if shipment.status in ['in_progress', 'completed']:
+            return Response({'error': 'Cannot assign to a shipment that is already in progress or completed.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        old_status = order.status
+        order.status = 'assigned'
+        order.assigned_vehicle = shipment.vehicle
+        order.assigned_driver = shipment.driver
+        order.is_priority = False
+        
+        import re
+        if order.delivery_address.startswith('[RETURN -'):
+            order.delivery_address = re.sub(r'^\[RETURN - [A-Z_]+\] ', '', order.delivery_address)
+            
+        order.save()
+        
+        ShipmentOrder.objects.create(shipment=shipment, order=order)
+        
+        OrderStatusLog.objects.create(
+            order=order,
+            from_status=old_status,
+            to_status='assigned',
+            changed_by=request.user,
+            source='dispatcher_reassign'
+        )
+        
+        return Response({'success': True, 'message': 'Order successfully reassigned to shipment.'})
+
+    @action(detail=True, methods=['post'])
+    def mark_priority(self, request, pk=None):
+        order = self.get_object()
+        
+        old_status = order.status
+        order.status = 'pending'
+        order.is_priority = True
+        
+        import re
+        if order.delivery_address.startswith('[RETURN -'):
+            order.delivery_address = re.sub(r'^\[RETURN - [A-Z_]+\] ', '', order.delivery_address)
+            
+        order.save()
+        
+        from .models import OrderStatusLog
+        OrderStatusLog.objects.create(
+            order=order,
+            from_status=old_status,
+            to_status='pending',
+            changed_by=request.user,
+            source='dispatcher_priority'
+        )
+        
+        return Response({'success': True, 'message': 'Order marked as high priority.'})
 
     @action(detail=True, methods=['get'])
     def download_pdf(self, request, pk=None):
