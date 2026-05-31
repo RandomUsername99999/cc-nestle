@@ -420,14 +420,21 @@ function EditVehiclePopup({ vehicle, onSuccess, onClose }) {
             if (vehicleType !== vehicle.vehicle_type) payload.vehicle_type = vehicleType;
             if (makeModel !== vehicle.make_model) payload.make_model = makeModel;
             if (manufacturer !== vehicle.manufacturer) payload.manufacturer = manufacturer;
-            if (parseInt(year) !== vehicle.year) payload.year = parseInt(year);
-            if (parseFloat(capacity) !== vehicle.capacity) payload.capacity = parseFloat(capacity);
+            const parsedYear = year ? parseInt(year) : null;
+            if (parsedYear !== vehicle.year) payload.year = parsedYear;
+            
+            const parsedCap = capacity ? parseFloat(capacity) : null;
+            if (parsedCap !== vehicle.capacity) payload.capacity = parsedCap;
             
             const parsedVol = volume ? parseFloat(volume) : null;
             if (parsedVol !== vehicle.volume) payload.volume = parsedVol;
             
-            if (registrationExpiry !== vehicle.registration_expiry) payload.registration_expiry = registrationExpiry;
-            if (insuranceExpiry !== vehicle.insurance_expiry) payload.insurance_expiry = insuranceExpiry;
+            const regExp = registrationExpiry || null;
+            if (regExp !== vehicle.registration_expiry) payload.registration_expiry = regExp;
+            
+            const insExp = insuranceExpiry || null;
+            if (insExp !== vehicle.insurance_expiry) payload.insurance_expiry = insExp;
+            
             if (isRefrigerated !== vehicle.is_refrigerated) payload.is_refrigerated = isRefrigerated;
 
             await api.patch(`vehicles/${vehicle.id}/`, payload);

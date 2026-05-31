@@ -552,7 +552,7 @@ export default function UserManagement() {
                                     <div className="flex items-center gap-2">
                                         {u.role === 'driver' && (
                                             <button 
-                                                onClick={() => downloadPdf(`reports/driver_vehicle_history/?user_id=${u.id}`, `Driver_History_${u.username}.pdf`)}
+                                                onClick={() => downloadPdf(`reports/driver_vehicle_history/?target_user_id=${u.id}`, `Driver_History_${u.username}.pdf`)}
                                                 className="w-10 h-10 flex items-center justify-center rounded-xl border border-coffee-100 text-coffee-300 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-100 transition-all shadow-sm"
                                                 title="Download Monthly Driver Assignment History"
                                             >

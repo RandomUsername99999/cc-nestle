@@ -2345,9 +2345,9 @@ class ReportViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'])
     def driver_vehicle_history(self, request):
-        user_id = request.query_params.get('user_id')
+        user_id = request.query_params.get('target_user_id')
         if not user_id:
-            return Response({"error": "user_id is required"}, status=400)
+            return Response({"error": "target_user_id is required"}, status=400)
         try:
             from .utils.document_generator import generate_pdf_response, draw_header, draw_styled_table
             from .models import VehicleAssignment

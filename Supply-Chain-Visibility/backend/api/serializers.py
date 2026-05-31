@@ -74,6 +74,15 @@ class UserSerializer(serializers.ModelSerializer):
     def get_status(self, obj):
         return 'active' if obj.is_active else 'inactive'
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        try:
+            if str(instance.role).lower() == 'driver' and hasattr(instance, 'employee_profile') and hasattr(instance.employee_profile, 'driver_profile'):
+                ret['driver_profile'] = DriverProfileSerializer(instance.employee_profile.driver_profile).data
+        except:
+            pass
+        return ret
+
     def create(self, validated_data):
         driver_profile_data = validated_data.pop('driver_profile', None)
         employee_data = validated_data.pop('employee_profile', None)
