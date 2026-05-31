@@ -114,6 +114,7 @@ class UserSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         employee_data = validated_data.pop('employee_profile', None)
         customer_data = validated_data.pop('customer_profile', None)
+        driver_profile_data = validated_data.pop('driver_profile', None)
         
         # Manually extract status active switch
         if 'is_active' in validated_data:
@@ -155,8 +156,12 @@ class UserSerializer(serializers.ModelSerializer):
                         license_expiry_date='2099-12-31',
                         license_type='heavy_vehicle'
                     )
+                
+                if driver_profile_data and hasattr(employee, 'driver_profile'):
+                    for attr, value in driver_profile_data.items():
+                        setattr(employee.driver_profile, attr, value)
+                    employee.driver_profile.save()
             
-        return instance
         return instance
 
 class MaintenanceLogSerializer(serializers.ModelSerializer):

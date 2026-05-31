@@ -10,7 +10,7 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-        
+
         // Identity Fallback for session-less/debugging scenarios
         const userId = localStorage.getItem('user_id');
         if (userId) {
@@ -22,7 +22,7 @@ api.interceptors.request.use(
                 config.data = { ...config.data, user_id: userId };
             }
         }
-        
+
         return config;
     },
     (error) => {

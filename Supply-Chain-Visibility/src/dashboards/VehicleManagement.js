@@ -457,6 +457,8 @@ function EditVehiclePopup({ vehicle, onSuccess, onClose }) {
                         <VehicleInputField label="Manufacturer" value={manufacturer} onChange={e => setManufacturer(e.target.value)} required />
                         <VehicleInputField label="Year" type="number" value={year} onChange={e => setYear(e.target.value)} required />
                         <VehicleInputField label="Capacity (KG)" type="number" value={capacity} onChange={e => setCapacity(e.target.value)} required />
+                        <VehicleInputField label="Registration Expiry" type="date" value={registrationExpiry} onChange={e => setRegistrationExpiry(e.target.value)} required icon={<BiCalendar/>} />
+                        <VehicleInputField label="Insurance Expiry" type="date" value={insuranceExpiry} onChange={e => setInsuranceExpiry(e.target.value)} required icon={<BiCalendar/>} />
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                         <button type="button" onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-all">Cancel</button>
