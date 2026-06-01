@@ -1738,15 +1738,39 @@ def trigger_reminder(request):
         
     try:
         if req_type == 'vehicle':
+            from vehicles.models import Vehicle
+            from api.models import VehicleAssignment
+            
             vehicle = Vehicle.objects.get(pk=req_id)
+            
+            # Check if vehicle has been assigned to a driver
+            assignment = VehicleAssignment.objects.filter(vehicle=vehicle, status='active').first()
+            if not assignment or not assignment.driver:
+                return Response({"error": f"Vehicle {vehicle.plate_number} is not assigned to any driver. Reminder cannot be sent to mobile app."}, status=400)
+                
+            driver = assignment.driver
+            
+            # Format detailed maintenance/renewal message
+            details = f"Vehicle {vehicle.plate_number} ({vehicle.manufacturer or ''} {vehicle.model or ''}) requires renewal/maintenance. "
+            if vehicle.registration_expiry:
+                details += f"Reg Exp: {vehicle.registration_expiry}. "
+            if vehicle.insurance_expiry:
+                details += f"Ins Exp: {vehicle.insurance_expiry}. "
+            if vehicle.next_service_date:
+                details += f"Next Svc Date: {vehicle.next_service_date}. "
+            if vehicle.next_service_mileage:
+                details += f"Next Svc Mileage: {vehicle.next_service_mileage} km."
+                
+            # Create AuditLog directly for the driver so it appears in their app
             AuditLog.objects.create(
                 user=request.user,
                 action='MANUAL_REMINDER_SENT',
-                resource_type='Vehicle',
-                resource_id=req_id,
-                details=f"Manual push notification dispatched for vehicle {vehicle.plate_number} renewals/maintenance."
+                resource_type='Driver',
+                resource_id=driver.id,
+                details=details
             )
-            return Response({"success": True, "message": "Vehicle reminder sent"})
+            return Response({"success": True, "message": f"Vehicle reminder sent directly to driver {driver.employee.full_name if driver.employee else 'Unknown'}"})
+            
         elif req_type == 'driver':
             from drivers.models import Driver
             driver = Driver.objects.get(employee__user__user_id=req_id)
