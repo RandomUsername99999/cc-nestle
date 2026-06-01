@@ -94,35 +94,43 @@ export default function ComplianceMaintenanceModule() {
     const records = useMemo(() => {
         const arr = [];
         vehicles.forEach(v => {
-            arr.push({
-                id: `veh_${v.id}`,
-                type: 'vehicle',
-                db_id: v.id,
-                title: v.plate_number,
-                subtitle: `${v.manufacturer || ''} ${v.model || ''}`.trim() || 'Unknown Asset',
-                department: 'Fleet Management',
-                assigned_to: drivers.find(d => d.driver_id === v.assignedDriver)?.employee?.full_name || 'Unassigned',
-                items: [
-                    { name: 'Registration', expiry: v.registration_expiry },
-                    { name: 'Insurance', expiry: v.insurance_expiry },
-                    { name: 'Maintenance', expiry: v.next_service_date }
-                ]
-            });
+            const validItems = [
+                { name: 'Registration', expiry: v.registration_expiry },
+                { name: 'Insurance', expiry: v.insurance_expiry },
+                { name: 'Maintenance', expiry: v.next_service_date }
+            ].filter(item => item.expiry);
+
+            if (validItems.length > 0) {
+                arr.push({
+                    id: `veh_${v.id}`,
+                    type: 'vehicle',
+                    db_id: v.id,
+                    title: v.plate_number,
+                    subtitle: `${v.manufacturer || ''} ${v.model || ''}`.trim() || 'Unknown Asset',
+                    department: 'Fleet Management',
+                    assigned_to: drivers.find(d => d.driver_id === v.assignedDriver)?.employee?.full_name || 'Unassigned',
+                    items: validItems
+                });
+            }
         });
 
         drivers.forEach(d => {
-            arr.push({
-                id: `drv_${d.driver_id}`,
-                type: 'driver',
-                db_id: d.driver_id,
-                title: d.employee?.full_name || `Driver #${d.driver_id}`,
-                subtitle: `License: ${d.license_number}`,
-                department: 'Personnel',
-                assigned_to: '-',
-                items: [
-                    { name: 'Driver License', expiry: d.license_expiry_date }
-                ]
-            });
+            const validItems = [
+                { name: 'Driver License', expiry: d.license_expiry_date }
+            ].filter(item => item.expiry);
+
+            if (validItems.length > 0) {
+                arr.push({
+                    id: `drv_${d.driver_id}`,
+                    type: 'driver',
+                    db_id: d.driver_id,
+                    title: d.employee?.full_name || `Driver #${d.driver_id}`,
+                    subtitle: `License: ${d.license_number}`,
+                    department: 'Personnel',
+                    assigned_to: '-',
+                    items: validItems
+                });
+            }
         });
 
         return arr.map(r => ({

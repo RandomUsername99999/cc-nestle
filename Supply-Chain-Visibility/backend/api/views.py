@@ -1754,7 +1754,7 @@ def trigger_reminder(request):
                 user=request.user,
                 action='MANUAL_REMINDER_SENT',
                 resource_type='Driver',
-                resource_id=req_id,
+                resource_id=driver.id,
                 details=f"Manual push notification dispatched for driver {driver.employee.full_name if driver.employee else 'Unknown'} license renewal."
             )
             return Response({"success": True, "message": "Driver reminder sent"})
