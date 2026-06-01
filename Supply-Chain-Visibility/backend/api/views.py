@@ -1823,7 +1823,7 @@ def driver_notifications(request):
         data = []
         for log in logs:
             data.append({
-                'id': log.id,
+                'id': log.log_id,,
                 'action': log.action,
                 'details': log.details,
                 'timestamp': log.timestamp.isoformat(),
