@@ -1795,8 +1795,9 @@ def driver_notifications(request):
         if not user_id:
             return Response({"error": "user_id is required"}, status=400)
             
+        # All local imports neatly packed inside to dodge circular dependency loops
         from drivers.models import Driver
-        from api.models import VehicleAssignment
+        from api.models import VehicleAssignment, AuditLog 
         from django.db.models import Q
         
         # Get the driver profile for this user
@@ -1811,7 +1812,10 @@ def driver_notifications(request):
         # Query AuditLogs
         query = Q(action__in=['MANUAL_REMINDER_SENT', 'EXPIRY_NOTIFICATION_SENT'])
         
-        driver_q = Q(resource_type='Driver', resource_id=driver.id)
+        # We are using getattr here as an insurance policy. If driver uses driver_id, it falls back cleanly!
+        driver_pk = getattr(driver, 'driver_id', getattr(driver, 'id', None))
+        driver_q = Q(resource_type='Driver', resource_id=driver_pk)
+        
         if vehicle_id:
             vehicle_q = Q(resource_type='Vehicle', resource_id=vehicle_id)
             query = query & (driver_q | vehicle_q)
@@ -1823,7 +1827,7 @@ def driver_notifications(request):
         data = []
         for log in logs:
             data.append({
-                'id': log.id,
+                'id': log.log_id, # <-- Clean fixed key name
                 'action': log.action,
                 'details': log.details,
                 'timestamp': log.timestamp.isoformat(),
