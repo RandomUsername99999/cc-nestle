@@ -3,19 +3,18 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
-from django.core.cache import cache
+from rest_framework_simplejwt.views import TokenRefreshView
+
+# Cleaned up imports from views
 from .views import (
     UserViewSet, VehicleViewSet, VehicleAssignmentViewSet, 
     CustomTokenObtainPairView, OrderViewSet, AuditLogViewSet, 
     dispatch_recommendations, ShipmentViewSet,
     DeliverySearchView, LiveVehicleView, OrderAuditView, ChangePasswordView,
     ProofOfDeliveryViewSet, ReportViewSet, OrderExceptionViewSet, UniversalSearchView,
-    trigger_reminder, driver_notifications
+    trigger_reminder, driver_notifications, tracking_location, get_locations
 )
-from .serializers import UserSerializer, VehicleSerializer, VehicleAssignmentSerializer
-from rest_framework_simplejwt.views import TokenRefreshView
-from .views import tracking_location, get_locations
+from .serializers import UserSerializer
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
